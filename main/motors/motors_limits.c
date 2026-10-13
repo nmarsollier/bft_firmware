@@ -18,8 +18,8 @@
 static const char *TAG = "MOTORS_LIMITS";
 static const char *NVS_NS = "mount";
 
-#define LIMITS_DEFAULT_RA_MIN  -100.0f
-#define LIMITS_DEFAULT_RA_MAX   100.0f
+#define LIMITS_DEFAULT_RA_MIN  -150.0f
+#define LIMITS_DEFAULT_RA_MAX   150.0f
 #define LIMITS_DEFAULT_DEC_MIN -150.0f
 #define LIMITS_DEFAULT_DEC_MAX  150.0f
 
