@@ -1,0 +1,89 @@
+/* Motors - motors_slew_axis.c
+ *
+ * Purpose: accept relative slew requests for a single axis.
+ *
+ * The motion task computes the absolute target from the live axis
+ * position when the command is dequeued, guaranteeing correct
+ * stacking of queued moves.
+ */
+#include "motors.h"
+#include "motors_internal.h"
+
+#include "esp_log.h"
+
+static const char *TAG = "MOTORS_SLEW_AXIS";
+
+static MotorResultCode motors_slew_axis_impl(float ra_delta_deg, float dec_delta_deg,
+                                             float ra_speed, float dec_speed) {
+    if (motors_status_is_error(motors_state.status)) {
+        return MOTOR_ERR_HARDWARE_ERROR;
+    }
+
+    if (motors_status_is_parked(motors_state.status)) {
+        return MOTOR_ERR_PARKED;
+    }
+
+    TrackingMode currTracking = TRACKING_NONE;
+    if (motors_state.status == MOTORS_STATUS_TRACKING
+        && motors_state.tracking != TRACKING_NONE) {
+        currTracking = motors_state.tracking;
+        MotorResultCode stop_rc = motors_stop();
+        if (stop_rc != MOTOR_OK) {
+            return stop_rc;
+        }
+    }
+
+    MotionCommand cmd = {
+        .type = MOTION_CMD_SLEW,
+        .ra_speed = ra_speed,
+        .dec_speed = dec_speed,
+        .relative = true,
+        .ra_delta_deg = ra_delta_deg,
+        .dec_delta_deg = dec_delta_deg,
+    };
+    if (!motors_queue_put(&cmd)) {
+        return MOTOR_ERR_BUSY;
+    }
+
+    if (currTracking != TRACKING_NONE) {
+        MotorResultCode trk_rc = motors_start_tracking(currTracking);
+        if (trk_rc != MOTOR_OK) {
+            ESP_LOGE(TAG, "Failed to resume tracking after slew (rc=%d)", trk_rc);
+        }
+    }
+    return MOTOR_OK;
+}
+
+/*
+ * Move the RA axis by a relative amount in degrees.
+ *
+ * Positive = forward (west on HA), negative = backward.
+ * Validates the future position against axis limits before enqueuing.
+ * Pauses and resumes tracking automatically when active.
+ */
+MotorResultCode motors_slew_axis_ra(float degrees, int speed_rate) {
+    if (!motors_is_valid_ra(motors_get_ra_deg() + degrees)) {
+        ESP_LOGW(TAG, "Rejected RA move: out of range (%.3f)",
+                 motors_get_ra_deg() + degrees);
+        return MOTOR_ERR_OUT_OF_RANGE;
+    }
+    return motors_slew_axis_impl(degrees, 0.0f,
+                                 motors_get_slewing_speed(speed_rate), 0.0f);
+}
+
+/*
+ * Move the DEC axis by a relative amount in degrees.
+ *
+ * Positive = north on declination, negative = south.
+ * Validates the future position against axis limits before enqueuing.
+ * Pauses and resumes tracking automatically when active.
+ */
+MotorResultCode motors_slew_axis_dec(float degrees, int speed_rate) {
+    if (!motors_is_valid_dec(motors_get_dec_deg() + degrees)) {
+        ESP_LOGW(TAG, "Rejected DEC move: out of range (%.3f)",
+                 motors_get_dec_deg() + degrees);
+        return MOTOR_ERR_OUT_OF_RANGE;
+    }
+    return motors_slew_axis_impl(0.0f, degrees, 0.0f,
+                                 motors_get_slewing_speed(speed_rate));
+}

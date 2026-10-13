@@ -53,3 +53,38 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+
+build/
+
+sdkconfig.old
+
+managed_components/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# IDEs
+.idea/
+.vscode/
+.history/
+
+# AI assistants
+.continuerc.json
+.continue_config_guide.md
+CONTINUE.md
+.clangd
+.github/copilot-instructions.md
+.claude/settings.local.json
+
+.cache/
+
+# CMake (CLion / IDE build trees)
+cmake-build-debug/
+cmake-build-release/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/

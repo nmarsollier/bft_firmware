@@ -1,0 +1,48 @@
+# sdkconfig.defaults — project-specific overrides for Montura
+# Applied automatically by idf.py build on top of ESP-IDF defaults.
+
+# Flash: ESP32-S3 N8R8 has 8 MB
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
+
+# CPU: 240 MHz — headroom for the motion task and RMT batch generation
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# Partition table: large single-app (3 MB factory partition)
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+CONFIG_PARTITION_TABLE_FILENAME="partitions_singleapp_large.csv"
+
+# TinyUSB: CDC-ACM serial device (the mount's only USB interface).
+CONFIG_TINYUSB_CDC_ENABLED=y
+CONFIG_TINYUSB_CDC_RX_BUFSIZE=2048
+CONFIG_TINYUSB_CDC_TX_BUFSIZE=2048
+CONFIG_TINYUSB_CDC_EP_BUFSIZE=512
+
+# TinyUSB: custom USB descriptors
+# (disable the default VID/PID so the custom values below take effect)
+CONFIG_TINYUSB_DESC_USE_ESPRESSIF_VID=n
+CONFIG_TINYUSB_DESC_USE_DEFAULT_PID=n
+CONFIG_TINYUSB_DESC_CUSTOM_VID=0x303A
+CONFIG_TINYUSB_DESC_CUSTOM_PID=0x4001
+CONFIG_TINYUSB_DESC_MANUFACTURER_STRING="NRM-WO"
+CONFIG_TINYUSB_DESC_PRODUCT_STRING="Mount Serial"
+CONFIG_TINYUSB_DESC_SERIAL_STRING="000001"
+CONFIG_TINYUSB_DESC_CDC_STRING="Mount Serial"
+
+# Compiler: performance optimization (-O2) instead of debug (-Og)
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# ── FreeRTOS: 1000 Hz tick for fine-grained RMT batch polling ──
+# The decoupled slew loop polls RMT completion at 1 ms granularity.  A
+# 100 Hz tick makes vTaskDelay(1ms) resolve to 0 ticks (a no-op) and the
+# motion task busy-spins, starving IDLE and tripping the task watchdog.
+CONFIG_FREERTOS_HZ=1000
+
+# ── CPU affinity: all non-motion tasks pinned to CPU 0 ──
+# CPU 1 is reserved exclusively for the motors_motion task (prio 23).
+CONFIG_ESP_MAIN_TASK_AFFINITY_CPU0=y
+CONFIG_ESP_TIMER_TASK_AFFINITY_CPU0=y
+CONFIG_ESP_TIMER_ISR_AFFINITY_CPU0=y
+
+# ── RMT: ISR in IRAM for minimum latency ──
+CONFIG_RMT_ISR_IRAM_SAFE=y

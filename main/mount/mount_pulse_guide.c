@@ -1,0 +1,83 @@
+/* Mount - mount_pulse_guide.c
+ *
+ * Purpose: validate mount state for PulseGuide, map astronomical
+ * directions (North/South/East/West) to signed RA/DEC speed offsets,
+ * and delegate to the motors layer.
+ *
+ * Direction mapping (offset added to base tracking speed):
+ *   East  → +RA  (move scope east relative to sky)
+ *   West  → -RA  (move scope west relative to sky)
+ *   North → +DEC
+ *   South → -DEC
+ */
+#include "mount.h"
+#include "mount_internal.h"
+
+#include "motors.h"
+
+#include "esp_log.h"
+
+static const char *TAG = "MOUNT_PULSE_GUIDE";
+
+MountResult mount_pulse_guide(GuideDirection direction, uint32_t duration_ms) {
+    if (mount_is_error()) {
+        return mount_result_error_state();
+    }
+
+    /* PulseGuide is only valid in READY (calibration) or TRACKING (guiding). */
+    MotorsState state = motors_current_state();
+    if (state.status != MOTORS_STATUS_READY &&
+        state.status != MOTORS_STATUS_TRACKING) {
+        ESP_LOGW(TAG, "Rejected: mount status=%s",
+                 motors_status_to_string(state.status));
+        return mount_result_error("Mount not ready for PulseGuide");
+    }
+
+    if (duration_ms == 0 || duration_ms > 30000) {
+        return mount_result_error("Duration out of range (1-30000 ms)");
+    }
+
+    float ra_rate = mount_get_guide_rate_ra();
+    float dec_rate = mount_get_guide_rate_dec();
+
+    MotorResultCode rc;
+    switch (direction) {
+    case GUIDE_DIRECTION_EAST:
+        /* +mechanical RA reduces celestial RA (RA = LST - HA, HA grows with
+         * RA axis), i.e. it moves west.  So east is -mechanical RA.
+         * See axis_to_equatorial(). */
+        rc = motors_pulse_guide_start(0, -ra_rate, duration_ms);
+        break;
+    case GUIDE_DIRECTION_WEST:
+        rc = motors_pulse_guide_start(0,  ra_rate, duration_ms);
+        break;
+    case GUIDE_DIRECTION_NORTH:
+    case GUIDE_DIRECTION_SOUTH: {
+        /* North (increasing celestial DEC) maps to +mechanical DEC on the
+         * east side of the pier (dec_axis >= 0) and to -mechanical DEC on the
+         * west side (dec_axis < 0).  The pier side is encoded in the sign of
+         * the DEC axis — see axis_to_equatorial(). */
+        float dec_axis_deg = motors_get_dec_deg();
+        float north_sign = (dec_axis_deg >= 0.0f) ? 1.0f : -1.0f;
+        float offset = (direction == GUIDE_DIRECTION_NORTH)
+                       ?  dec_rate * north_sign
+                       : -dec_rate * north_sign;
+        rc = motors_pulse_guide_start(1, offset, duration_ms);
+        break;
+    }
+    default:
+        return mount_result_error("Invalid guide direction");
+    }
+
+    return motors_result_code_error_result(rc);
+}
+
+/* ── Guide rate storage (deg/s) — per axis ── */
+
+static float s_guide_rate_ra  = TRACKING_SPEED_SIDEREAL_DPS * 0.5f;
+static float s_guide_rate_dec = TRACKING_SPEED_SIDEREAL_DPS * 0.5f;
+
+void mount_set_guide_rate_ra(float rate_dps)  { s_guide_rate_ra = rate_dps; }
+void mount_set_guide_rate_dec(float rate_dps) { s_guide_rate_dec = rate_dps; }
+float mount_get_guide_rate_ra(void)           { return s_guide_rate_ra; }
+float mount_get_guide_rate_dec(void)          { return s_guide_rate_dec; }

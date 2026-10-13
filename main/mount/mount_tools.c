@@ -1,0 +1,64 @@
+/* Mount - mount_tools.c
+ *
+ * Purpose: mount result helpers and command validation support.
+ */
+#include "mount.h"
+#include "mount_internal.h"
+
+#include "motors.h"
+
+/*
+ * Current RA in decimal hours, read directly from the authoritative
+ * motor position (axis degrees).  RA hour = axis_deg / 15.
+ */
+float mount_get_ra_hours(void) {
+    AxisCoordinates axis = {.ra_axis_deg = motors_get_ra_deg(),
+                            .dec_axis_deg = motors_get_dec_deg()};
+    return axis_to_equatorial(axis).ra_hours;
+}
+
+float mount_get_dec_deg(void) {
+    AxisCoordinates axis = {.ra_axis_deg = motors_get_ra_deg(),
+                            .dec_axis_deg = motors_get_dec_deg()};
+    return axis_to_equatorial(axis).dec_deg;
+}
+
+MountResult mount_result_error(const char *message) {
+    MountResult result = {
+        .ok = false,
+        .message = message
+    };
+
+    return result;
+}
+
+/*
+ * Business use case: normalize mount command responses.
+ *
+ * Objective: provide a uniform success/error contract for the protocol and UI
+ * clients.
+ */
+MountResult mount_result_ok() {
+    return (MountResult){.ok = true, .message = "OK"};
+}
+
+MountResult motors_result_code_error_result(MotorResultCode rc) {
+    switch (rc) {
+        case MOTOR_OK:
+            return mount_result_ok();
+        case MOTOR_ERR_INVALID_AXIS:
+            return mount_result_error("Invalid axis");
+        case MOTOR_ERR_OUT_OF_RANGE:
+            return mount_result_error("Target out of range");
+        case MOTOR_ERR_NOT_READY:
+            return mount_result_error("Motors not ready");
+        case MOTOR_ERR_HARDWARE_ERROR:
+            return mount_result_error_state();
+        case MOTOR_ERR_PARKED:
+            return mount_result_error("Mount is parked");
+        case MOTOR_ERR_BUSY:
+            return mount_result_error("Command queue full — try again");
+        default:
+            return mount_result_error("Motor error");
+    }
+}
