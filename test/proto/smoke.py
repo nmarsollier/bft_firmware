@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke-test the NRM-BFM serial protocol over USB CDC-ACM.
+"""Smoke-test the BFT serial protocol over USB CDC-ACM.
 
 The device appears as a plain serial port (macOS: /dev/cu.usbmodem*, Linux:
 /dev/ttyACM0), distinct from the USB-Serial/JTAG port used by `idf.py monitor`.
@@ -55,7 +55,7 @@ def check(label, cond):
 def main():
     port = sys.argv[1] if len(sys.argv) > 1 else detect_serial_port()
     if not port:
-        print("No NRM-BFM serial port found. Connect and flash, or pass the port "
+        print("No BFT serial port found. Connect and flash, or pass the port "
               "as an argument.")
         sys.exit(1)
     m = Mount(port)

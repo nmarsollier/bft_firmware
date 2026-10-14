@@ -5,7 +5,7 @@ def test_capabilities_identity(proto):
     """CAPABILITIES reports identity and protocol version."""
     h = proto.capabilities()
     assert h["proto"] == 1
-    assert h["name"] == "NRM-BFM"
+    assert h["name"] == "BFT"
     assert h["axes"] == ["ra", "dec"]
     assert isinstance(h["boot_id"], int) and h["boot_id"] != 0
     assert isinstance(h["config_rev"], int)

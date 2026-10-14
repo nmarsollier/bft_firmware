@@ -1,4 +1,4 @@
-# NRM-BFM test suite
+# BFT test suite
 
 Functional acceptance suite for an equatorial mount against real hardware,
 driven through the **CDC-ACM serial protocol**.
@@ -32,7 +32,7 @@ test/proto/          serial protocol acceptance suite
 
 ## Requirements
 
-- NRM-BFM board connected over USB, flashed with the firmware (CDC-ACM).
+- BFT board connected over USB, flashed with the firmware (CDC-ACM).
   The suite auto-detects the serial port by USB VID/PID.
 - Python 3 + `pytest`.
 
@@ -59,7 +59,7 @@ python3 -m pytest -k "park"     # by name
 
 ## Skill
 
-There is a project skill, **`nrm-test`** (`.claude/skills/nrm-test/SKILL.md`),
+There is a project skill, **`bft-test`** (`.claude/skills/bft-test/SKILL.md`),
 that encapsulates this whole workflow: how to run the suite, how to recover the
 board when the serial link is down, how to diagnose a failure (transport vs
 device vs assertion, serial capture for crashes) and how to fix it without
@@ -68,7 +68,7 @@ weakening the test expectations.
 In Claude Code, invoke it with:
 
 ```
-/nrm-test
+/bft-test
 ```
 
 or just ask to "run the tests and fix any failure" and the skill triggers by its

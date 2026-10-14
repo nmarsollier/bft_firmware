@@ -1,4 +1,4 @@
-# Reglas de Desarrollo del Proyecto NRM-BFM
+# Reglas de Desarrollo del Proyecto BFT
 
 Mantener este archivo en formato simple, para que pueda leerse y editarse rapidamente
 
@@ -7,7 +7,7 @@ Mantener este archivo en formato simple, para que pueda leerse y editarse rapida
 Este firmware se comunica por USB CDC-ACM con una app de escritorio Go que expone
 Alpaca/UI. Su código vive en **otro repo local**:
 
-- **`~/Dev/nrm_ha_go`** — gateway Go (módulo `github.com/nmarsollier/nrm_ha_go`).
+- **`~/Dev/mount_panel`** — gateway Go (módulo `github.com/nmarsollier/mount_panel`).
   Documentación en su `README.md` y `CLAUDE.md`.
 
 Cuando se necesite buscar referencias de código del gateway, leer su protocolo de
@@ -16,7 +16,7 @@ consumo o consultar cómo se implementa el lado Alpaca/UI, mirar ahí.
 ## Definicion del proyecto
 
 - Logica para manejar montura ecuatorial con harmonic drives para astrofotografia
-- Montura NRM-BFM con harmonic drives de reduccion 100:1 y poleas GT2 9mm 5:1 (20T→100T)
+- Montura BFT con harmonic drives de reduccion 100:1 y poleas GT2 9mm 5:1 (20T→100T)
 - Reduccion total: 500:1 en ambos ejes
 - Utiliza una placa ESP32-S3 44 pines
 - Utiliza 2 motores Nema 17 (lazo abierto) con driver TB6600, configurados a 32 microsteps
@@ -65,7 +65,7 @@ consumo o consultar cómo se implementa el lado Alpaca/UI, mirar ahí.
 - **PWM**: 8 canales LEDC independientes
 - **USB**: USB OTG 1.1 (nativo, sin chip externo)
 
-### Pinout definitivo NRM-BFM
+### Pinout definitivo BFT
 
 | GPIO | Funcion           | Notas                                              |
 |------|-------------------|----------------------------------------------------|

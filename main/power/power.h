@@ -4,7 +4,7 @@
 #include "esp_err.h"
 
 /*
- * External-power sensing for the NRM-BFM mount.
+ * External-power sensing for the BFT mount.
  *
  * The ESP32-S3 board can be powered from USB alone, in which case the 12V
  * switch is off and the motors have no power — yet the firmware would still

@@ -72,4 +72,4 @@ def test_channel_recovers_after_invalid(proto):
         '{"extra":{"type":"action"},"id":1}',
     ):
         assert proto.raw_frame(body)["ok"] is False
-    assert proto.capabilities()["name"] == "NRM-BFM"
+    assert proto.capabilities()["name"] == "BFT"

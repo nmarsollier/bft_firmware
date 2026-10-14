@@ -1,4 +1,4 @@
-# NRM-BFM — top-level convenience Makefile.
+# BFT — top-level convenience Makefile.
 #
 # Forwards the test/flash targets to test/Makefile so they can be invoked from
 # the project root without `cd test`:

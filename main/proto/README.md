@@ -1,4 +1,4 @@
-# Protocolo de montura NRM-BFM (USB CDC-ACM)
+# Protocolo de montura BFT (USB CDC-ACM)
 
 Documento de diseño del protocolo serial entre la PC y el ESP32-S3. Acá está toda
 la idea, de principio a fin: la motivación, el formato del cable, las 5 familias
@@ -99,8 +99,8 @@ hex en ambos.
 {
   "type": "capabilities", "id": 1, "ok": true,
   "boot_id": "16e38e47", "proto": 1,
-  "device_type": "mount", "device_id": "nrm-bfm",
-  "name": "NRM-BFM", "firmware_version": "0.1.0",
+  "device_type": "mount", "device_id": "bft",
+  "name": "BFT", "firmware_version": "0.1.0",
   "capabilities": {
     "axes": ["ra", "dec"],
     "slew_speeds_dps": [1.0, 3.0, 4.5, 6.0],

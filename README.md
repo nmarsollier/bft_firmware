@@ -1,4 +1,4 @@
-# NRM-BFM — Fork Equatorial Mount
+# BFT — Fork Equatorial Mount
 
 Fork equatorial mount for astrophotography: the telescope sits balanced between
 the fork arms, with no counterweight and no meridian flip. An ESP32-S3 drives
@@ -7,10 +7,10 @@ Alpaca/ASCOM for N.I.N.A. and PHD2.
 
 ## Sibling projects
 
-- **`~/Dev/nrm_bft_eaf`** — electronic focuser + accessories firmware (same
+- **`~/Dev/eaf_firmware`** — electronic focuser + accessories firmware (same
   serial protocol, `role="accessories"`): focuser motor, primary-mirror fan,
   mirror/ambient temperature, humidity and vibration sensing.
-- **`~/Dev/nrm_ha_go`** — Go gateway (Alpaca/UI): the desktop client that
+- **`~/Dev/mount_panel`** — Go gateway (Alpaca/UI): the desktop client that
   connects to the mount and the EAF and exposes them to N.I.N.A. and PHD2.
 
 ## Build & flash
@@ -36,7 +36,7 @@ brew install cmake ninja
 ## Run
 
 The firmware has no UI of its own: it only answers over the USB CDC-ACM port.
-The client is the Go gateway (`~/Dev/nrm_ha_go`), which exposes Alpaca/ASCOM and
+The client is the Go gateway (`~/Dev/mount_panel`), which exposes Alpaca/ASCOM and
 the UI for N.I.N.A. and PHD2.
 
 ## Tests

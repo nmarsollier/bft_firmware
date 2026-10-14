@@ -1,11 +1,11 @@
 ---
-name: nrm-test
-description: Run the NRM-BFM mount test suite and fix any failure. Use when the user asks to run the tests, diagnose a failure, or fix a bug the suite surfaces.
+name: bft-test
+description: Run the BFT mount test suite and fix any failure. Use when the user asks to run the tests, diagnose a failure, or fix a bug the suite surfaces.
 ---
 
-# Run and fix the NRM-BFM tests
+# Run and fix the BFT tests
 
-The NRM-BFM mount has a functional acceptance suite against real hardware, driven
+The BFT mount has a functional acceptance suite against real hardware, driven
 through the **CDC-ACM serial protocol**.
 
 - `test/proto/` → the serial protocol suite. Run with pytest.

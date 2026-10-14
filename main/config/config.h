@@ -17,12 +17,12 @@
  * ========================================================================= */
 
 /* Mount identity — reported in the unified `capabilities` handshake. */
-#define MOUNT_NAME             "NRM-BFM"
-#define MOUNT_DEVICE_ID        "nrm-bfm"
+#define MOUNT_NAME             "BFT"
+#define MOUNT_DEVICE_ID        "bft"
 #define MOUNT_FIRMWARE_VERSION "0.1.0" /* TODO: bump to the real version */
 
 /* =========================================================================
- * Pin assignments — NRM-BFM (ESP32-S3 44-pin board).
+ * Pin assignments — BFT (ESP32-S3 44-pin board).
  * ========================================================================= */
 
 /* Step / direction pins (contiguous GPIO 14→11 for clean PCB routing):
@@ -52,7 +52,7 @@
  * ========================================================================= */
 
 /* Microstep resolution — TB6600 driver DIP-switch setting (SW1-SW3).
- * NRM-BFM: 32 microsteps = 6400 steps/revolution. */
+ * BFT: 32 microsteps = 6400 steps/revolution. */
 #define MOTORS_MICROSTEPS 32
 
 /* Total gear reduction: 5:1 belt (20T→100T GT2 9mm) × 100:1 harmonic drive.

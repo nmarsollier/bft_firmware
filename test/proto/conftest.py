@@ -1,4 +1,4 @@
-"""Fixtures and helpers for the NRM-BFM serial protocol suite.
+"""Fixtures and helpers for the BFT serial protocol suite.
 
 The suite drives the mount through the CDC-ACM protocol (request/response).
 The ESP is the authority over the mount: it publishes a coherent state and
@@ -40,7 +40,7 @@ def profile():
         p["serial_port"] = port
     else:
         pytest.fail(
-            "No NRM-BFM CDC serial port found. Connect the board, flash the "
+            "No BFT CDC serial port found. Connect the board, flash the "
             "firmware (`make flash`), then re-run."
         )
     return p

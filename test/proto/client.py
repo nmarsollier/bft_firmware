@@ -26,13 +26,13 @@ class DeviceError(RuntimeError):
         self.raw = raw
 
 
-# USB identity of the NRM-BFM CDC-ACM device (see sdkconfig.defaults).
+# USB identity of the BFT CDC-ACM device (see sdkconfig.defaults).
 NRM_VID = 0x303A
 NRM_PID = 0x4001
 
 
 def detect_serial_port():
-    """Return the NRM-BFM CDC-ACM port, or None when it is not found.
+    """Return the BFT CDC-ACM port, or None when it is not found.
 
     Prefers an exact USB VID/PID match, then falls back to the first
     usbmodem (macOS) / ttyACM (Linux) device.

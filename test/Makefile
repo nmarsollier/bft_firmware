@@ -1,4 +1,4 @@
-# NRM-BFM — test suite runner
+# BFT — test suite runner
 #
 #   make flash         flash the firmware
 #   make test-cdc      serial protocol (CDC-ACM)

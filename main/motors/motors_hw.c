@@ -1,7 +1,7 @@
 /* Motors - motors_hw.c
  *
  * Purpose: DIR GPIO control for the open-loop stepper
- * drivers (TB6600, NRM-BFM).
+ * drivers (TB6600, BFT).
  *
  * STEP pulse generation is handled by the RMT peripheral (motors_rmt.c)
  * with hardware-timed pulse shapes (RA via DMA, DEC via FIFO).
