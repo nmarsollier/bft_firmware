@@ -39,7 +39,6 @@ typedef struct {
 typedef struct {
     float ra_axis_deg;
     float dec_axis_deg;
-    int pier_side;      /* 0 = pierEast, 1 = pierWest — set by equatorial_to_axis */
 } AxisCoordinates;
 
 /* Formatted astronomical coordinate types. */
@@ -62,7 +61,6 @@ typedef struct {
     RaHMS ra;
     DecDMS dec;
     float lst_hours;    /* Local sidereal time (hours) */
-    int pier_side;      /* 0 = pierEast (normal), 1 = pierWest (flipped) */
     MountSettings settings;
 } VisibleStatusData;
 
@@ -93,7 +91,7 @@ void mount_init(void);
  * -----------------------------
  * Return the current status view that the serial protocol and its clients consume.
  * The structure contains motors-derived status, current tracking mode,
- * RA/DEC coordinates, LST, pier side, and persisted settings.
+ * RA/DEC coordinates, LST, and persisted settings.
  */
 VisibleStatusData mount_get_visible_status(void);
 

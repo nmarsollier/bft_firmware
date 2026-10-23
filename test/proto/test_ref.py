@@ -37,7 +37,7 @@ def test_find_home_when_already_home(proto):
     assert proto.state()["at_home"] is True
 
 
-@pytest.mark.parametrize("ra,dec", [(6.0, -60.0), (8.0, -45.0), (10.0, -70.0)])
+@pytest.mark.parametrize("ra,dec", [(6.0, -60.0), (5.0, -45.0), (7.0, -70.0)])
 def test_find_home_from_various_positions(proto, ra, dec):
     """ACTION home returns to axis (0,0) from different sky positions."""
     setup_site_time(proto)

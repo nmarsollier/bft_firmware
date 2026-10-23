@@ -899,6 +899,13 @@ static void slewing_loop_rmt(void) {
             && motors_rmt_try_wait_dec()) {
             if (!s_motion.active) break;
             motors_state.dec_steps += (int64_t)dec_sign * (int64_t)dec_batch[dec_ping];
+            /* A manual move (MoveAxis) that reaches a non-zero DEC position
+             * re-derives the remembered orientation from its sign.  SLEW never
+             * does this: a GOTO preserves orientation, so it can leave the
+             * pole without a 180° swing. */
+            if (is_move_axis && motors_state.dec_steps != 0) {
+                motors_state.dec_orientation_negative = (motors_state.dec_steps < 0);
+            }
             dec_steps_done += dec_batch[dec_ping];
 
             int64_t dec_proj_trav = (int64_t)dec_sign

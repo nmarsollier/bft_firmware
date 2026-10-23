@@ -106,7 +106,8 @@ hex en ambos.
     "slew_speeds_dps": [1.0, 3.0, 4.5, 6.0],
     "tracking_modes": ["none", "sidereal", "lunar", "solar"],
     "caps": { "guide": true, "home": true, "park": true, "unpark": true,
-              "move_axis": true, "slew": true, "tracking": true, "sync": false }
+              "move_axis": true, "slew": true, "tracking": true, "sync": false,
+              "meridian_flip": false }
   }
 }
 ```
@@ -126,7 +127,7 @@ aparentemente válidos).
   "ra_steps": 123456, "dec_steps": -987654,     // int64 autoritativo (sin pérdida)
   "ra_axis_deg": 12.34, "dec_axis_deg": -5.6,   // posición física de ejes
   "ra": 1.2345, "dec": -33.4, "lst": 3.1415,    // horas / grados / horas
-  "pier_side": "east | west",
+  "pier_side": "unknown",
   "ra_speed_dps": 0.0, "dec_speed_dps": 0.0,
   "guiding": false, "at_home": false, "at_park": false,
   "power": true, "time_valid": true,
@@ -267,3 +268,20 @@ La app de escritorio:
 
 Como el ESP ya no tiene red, la app también le provee la **hora** (`config.utc`)
 cuando arranca, para que GOTO funcione.
+
+### Horquilla y meridiano
+
+La horquilla no tiene lado de columna ni realiza flip meridional: el telescopio
+está siempre del mismo lado y puede apuntar a cualquier lado del meridiano sin
+cambiar de orientación. Para un objeto al oeste del meridiano RA gira en un
+sentido; para uno al este, gira en el otro. DEC no invierte su sentido porque
+no hay flip real.
+
+Por eso `pier_side` vale siempre `"unknown"`: el campo se conserva por
+compatibilidad de forma, pero no describe un lado de columna. La capacidad
+`meridian_flip` es `false`.
+
+GOTO apunta a ambos lados del meridiano sin seleccionar una orientación
+alternativa ni agregar vueltas completas para eludir límites. En el polo sur
+exacto conserva el RA mecánico. Los ejes son posiciones absolutas limitadas y
+respetan los límites configurados en todo momento.

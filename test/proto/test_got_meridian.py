@@ -1,13 +1,9 @@
-"""GOT-flip — a goto across the meridian flips the pier side."""
+"""GOTO across the meridian preserves the fork orientation."""
 import pytest
 
 from conftest import assert_angular_close, assert_goto_duration, setup_site_time
 
 SPEED_DPS = 6.0
-
-
-def _pier(proto):
-    return 0 if proto.state()["pier_side"] == "east" else 1
 
 
 @pytest.fixture(autouse=True)
@@ -17,18 +13,20 @@ def _quiet(proto):
     proto.control(tracking="none")
 
 
-def test_meridian_flip(proto):
-    """West-of-meridian → pierEast; east-of-meridian → pierWest (flip)."""
+def test_meridian_crossing_without_flip(proto):
+    """Both sides of the meridian use positive DEC and the expected RA."""
     setup_site_time(proto)
     lst = proto.state()["lst"]
 
-    ra_west = (lst - 4.0) % 24.0   # HA = +4h → pierEast
+    ra_west = (lst - 4.0) % 24.0   # HA = +4h
     assert_goto_duration(proto, ra_west, -60.0, SPEED_DPS)
-    assert _pier(proto) == 0, f"HA=+4h should be pierEast, got {_pier(proto)}"
+    assert abs(proto.state()["dec_axis_deg"] - 30) < 0.1
+    assert 59 < proto.state()["ra_axis_deg"] < 61
 
-    ra_east = (lst + 4.0) % 24.0   # HA = -4h → pierWest (flip)
+    ra_east = (lst + 4.0) % 24.0   # HA = -4h
     assert_goto_duration(proto, ra_east, -60.0, SPEED_DPS)
-    assert _pier(proto) == 1, f"HA=-4h should be pierWest (flip), got {_pier(proto)}"
+    assert abs(proto.state()["dec_axis_deg"] - 30) < 0.1
+    assert -61 < proto.state()["ra_axis_deg"] < -59
 
 
 def test_goto_near_meridian(proto):

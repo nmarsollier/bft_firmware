@@ -32,6 +32,6 @@ def test_goto_during_goto(proto):
     setup_site_time(proto)
     proto.action("goto", ra=6.0, dec=-60.0, speed=4)
     wait_slewing(proto)
-    proto.action("goto", ra=8.0, dec=-45.0, speed=4)
+    proto.action("goto", ra=5.0, dec=-45.0, speed=4)
     wait_not_moving(proto)
     assert proto.state()["state"] != "slewing"

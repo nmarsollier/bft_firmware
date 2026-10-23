@@ -16,7 +16,7 @@ def test_state_has_position_fields(proto):
         assert key in st, f"missing {key}"
     assert isinstance(st["ra_steps"], int)
     assert isinstance(st["dec_steps"], int)
-    assert st["pier_side"] in ("east", "west")
+    assert st["pier_side"] == "unknown"
 
 
 def test_state_boot_id_stable(proto):

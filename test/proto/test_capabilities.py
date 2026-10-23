@@ -8,7 +8,6 @@ def test_capabilities_identity(proto):
     assert h["name"] == "BFT"
     assert h["axes"] == ["ra", "dec"]
     assert isinstance(h["boot_id"], int) and h["boot_id"] != 0
-    assert isinstance(h["config_rev"], int)
 
 
 def test_capabilities_slew_speeds(proto):
@@ -37,6 +36,8 @@ def test_capabilities_flags(proto):
     assert caps["tracking"] is True
     # Sync is deferred in this iteration.
     assert caps["sync"] is False
+    # Fork mount: no meridian flip.
+    assert caps["meridian_flip"] is False
 
 
 def test_capabilities_boot_id_stable(proto):

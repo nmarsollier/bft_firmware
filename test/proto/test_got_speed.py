@@ -46,7 +46,7 @@ def test_small_goto_time(proto, delta):
     """A small DEC goto of `delta` degrees takes the model time."""
     setup_site_time(proto)
     lst = proto.state()["lst"]
-    ra = (lst - 4.0) % 24.0   # pier side unambiguous
+    ra = (lst - 4.0) % 24.0   # HA = +4h
     proto.action("goto", ra=ra, dec=-60.0, speed=4)
     wait_not_moving(proto)
 

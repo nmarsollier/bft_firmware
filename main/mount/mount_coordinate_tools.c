@@ -22,24 +22,21 @@
  * German EQ).
  *
  * =========================================================================
- * TWO MECHANICAL SOLUTIONS
+ * FORK ORIENTATION
  * =========================================================================
  *
- * The mount can point at the same sky position from two configurations:
- * the primary branch (telescope on the +DEC side) and the secondary
- * branch (telescope through the pole).  For the fork only the primary
- * branch is selected until the secondary branch's mechanical travel is
- * verified (MOUNT_SECONDARY_SOLUTION_ENABLED).
+ * A fork mount has no side of pier and no meridian flip.  GOTO preserves the
+ * physical DEC orientation: positive at home, negative only when the telescope
+ * was moved through the pole by hand.  It never selects the opposite
+ * orientation to reach a target.
  *
- *   primary (0):   ra = HA - HOME_HA_OFFSET,          dec =  DEC + 90
- *   secondary (1): ra = HA - HOME_HA_OFFSET + 180,    dec = -(DEC + 90)
+ *   positive DEC: ra = HA,       dec =  DEC + 90
+ *   negative DEC: ra = HA + 180, dec = -(DEC + 90)
  *
- * The secondary branch is offset 180° in RA and flips DEC, so both
- * branches point at the same object.
- *
- * DEC axis is a linear coordinate (NOT circular).  It is NOT
- * normalised with normalize_degf() — that would incorrectly wrap
- * +180 to -180, inverting the pier side sign.
+ * In the negative branch the +180° converts the already-existing physical
+ * orientation; it is NOT a command to flip.  DEC is a linear coordinate (not
+ * wrapped): its sign is still needed for coordinate conversion and for
+ * North/South guiding, even though a fork has no pier side.
  *
  * =========================================================================
  * COORDINATE SYSTEM
@@ -135,11 +132,6 @@ static float normalize_hoursf(float h) {
  * Fork mount: 0 (DEC opens along the meridian at RA home).  German EQ: 90. */
 #define HOME_HA_OFFSET_DEG  0.0f
 
-/* Only the primary branch (telescope on the +DEC side) is selected until the
- * secondary branch's mechanical travel (telescope through the pole) is
- * verified.  Set to 1 to enable the lowest-cost selection between both. */
-#define MOUNT_SECONDARY_SOLUTION_ENABLED 0
-
 /* Validate against motor hardware limits (single source of truth).
  * motors_current_state().limits defines the authoritative boundaries. */
 static bool axis_within_limits(float ra, float dec) {
@@ -151,19 +143,21 @@ static bool axis_within_limits(float ra, float dec) {
 /* --------------------------------------------------------------------------
  * Equatorial -> Axis  (forward conversion)
  *
- * Two mechanically-distinct candidates; pick the valid one with the
- * lowest movement cost from the current axis position.
+ * Keep the current DEC orientation; reject targets outside the configured
+ * travel rather than switching orientation or adding full RA revolutions.
  * -------------------------------------------------------------------------- */
 bool equatorial_to_axis(EquatorialCoordinates eq, AxisCoordinates current,
                         time_t at_time, AxisCoordinates *out) {
 
-    if (eq.dec_deg < -90.0f || eq.dec_deg > 90.0f) {
+    if (!out || !isfinite(eq.ra_hours) || !isfinite(eq.dec_deg) ||
+        !isfinite(current.ra_axis_deg) || !isfinite(current.dec_axis_deg) ||
+        eq.dec_deg < -90.0f || eq.dec_deg > 90.0f) {
         ESP_LOGE("COORD_CONV", "Invalid DEC %.4f — rejecting", eq.dec_deg);
         return false;
     }
 
-    while (eq.ra_hours < 0.0f)   eq.ra_hours += 24.0f;
-    while (eq.ra_hours >= 24.0f) eq.ra_hours -= 24.0f;
+    eq.ra_hours = fmodf(eq.ra_hours, 24.0f);
+    if (eq.ra_hours < 0.0f) eq.ra_hours += 24.0f;
 
     double lst  = gmst_hours_from_jd(unix_time_to_julian_date(at_time))
                   + (mount_internal_state.lon / 15.0);
@@ -175,43 +169,25 @@ bool equatorial_to_axis(EquatorialCoordinates eq, AxisCoordinates current,
     float ha_deg = ha_h * 15.0f;
     float dec_base = eq.dec_deg + 90.0f;
 
-    typedef struct { float ra; float dec; int pier; } Candidate;
-    Candidate c[2];
+    /* The orientation is a remembered physical state, not the current DEC sign:
+     * at dec_axis == 0 (the pole) the sign is lost, and a GOTO out of the pole
+     * must use the previous side instead of swinging 180°. */
+    bool negative_dec = motors_current_state().dec_orientation_negative;
+    float ra = normalize_degf(ha_deg - HOME_HA_OFFSET_DEG
+                             + (negative_dec ? 180.0f : 0.0f));
+    float dec = negative_dec ? -dec_base : dec_base;
 
-    /* Primary branch: telescope on the +DEC side. */
-    c[0].ra   = normalize_degf(ha_deg - HOME_HA_OFFSET_DEG);
-    c[0].dec  = dec_base;
-    c[0].pier = 0;
+    /* At the celestial pole RA is arbitrary; keep the polar axis stationary. */
+    if (dec_base == 0.0f) ra = current.ra_axis_deg;
 
-    /* Secondary branch: telescope through the pole (opposite RA, -DEC). */
-    c[1].ra   = normalize_degf(ha_deg - HOME_HA_OFFSET_DEG + 180.0f);
-    c[1].dec  = -dec_base;
-    c[1].pier = 1;
-
-    int best = -1;
-    float best_cost = 0.0f;
-    int n = MOUNT_SECONDARY_SOLUTION_ENABLED ? 2 : 1;
-    for (int i = 0; i < n; i++) {
-        if (!axis_within_limits(c[i].ra, c[i].dec))
-            continue;
-        /* RA axis is limited (not circular) — use linear delta. */
-        float cost = fabsf(c[i].ra - current.ra_axis_deg)
-                   + fabsf(c[i].dec - current.dec_axis_deg);
-        if (best < 0 || cost < best_cost) {
-            best = i;
-            best_cost = cost;
-        }
-    }
-
-    if (best < 0) {
-        ESP_LOGE("COORD_CONV", "No valid axis solution for RA=%.4fh DEC=%.4f",
+    if (!axis_within_limits(ra, dec)) {
+        ESP_LOGE("COORD_CONV", "Target outside fork travel: RA=%.4fh DEC=%.4f",
                  eq.ra_hours, eq.dec_deg);
         return false;
     }
 
-    out->ra_axis_deg  = c[best].ra;
-    out->dec_axis_deg = c[best].dec;
-    out->pier_side    = c[best].pier;
+    out->ra_axis_deg = ra;
+    out->dec_axis_deg = dec;
 
     return true;
 }
@@ -219,11 +195,12 @@ bool equatorial_to_axis(EquatorialCoordinates eq, AxisCoordinates current,
 /* --------------------------------------------------------------------------
  * Axis -> Equatorial  (reverse conversion)
  *
- * The active branch is reliably encoded in the sign of dec_axis because
- * DEC is linear (not normalised):
+ * The orientation is the remembered physical state (motors_state
+ * .dec_orientation_negative), not the sign of dec_axis — at dec_axis == 0 the
+ * sign is ambiguous:
  *
- *   dec_axis >= 0  ->  primary    ->  HA = ra + offset,       DEC = dec - 90
- *   dec_axis <  0  ->  secondary  ->  HA = ra + offset + 180, DEC = -dec - 90
+ *   positive  ->  HA = ra + offset,       DEC = dec - 90
+ *   negative  ->  HA = ra + offset + 180, DEC = -dec - 90
  * -------------------------------------------------------------------------- */
 EquatorialCoordinates axis_to_equatorial(AxisCoordinates axis) {
     EquatorialCoordinates out;
@@ -232,12 +209,12 @@ EquatorialCoordinates axis_to_equatorial(AxisCoordinates axis) {
      * exact pole) DEC is -90 and RA is degenerate: the formula still returns
      * a valid, if arbitrary, RA — no threshold erases the nearby cone. */
     float ha_deg, dec_deg;
-    if (axis.dec_axis_deg >= 0.0f) {
-        /* Primary branch: HA = ra + offset. */
+    if (!motors_current_state().dec_orientation_negative) {
+        /* Positive orientation: HA = ra + offset. */
         ha_deg  = normalize_degf(axis.ra_axis_deg + HOME_HA_OFFSET_DEG);
         dec_deg = axis.dec_axis_deg - 90.0f;
     } else {
-        /* Secondary branch: HA = ra + offset + 180. */
+        /* Negative orientation: HA = ra + offset + 180. */
         ha_deg  = normalize_degf(axis.ra_axis_deg + HOME_HA_OFFSET_DEG + 180.0f);
         dec_deg = -axis.dec_axis_deg - 90.0f;
     }

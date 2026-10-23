@@ -43,6 +43,11 @@ esp_err_t power_init(void) {
 }
 
 bool power_has_external(void) {
+#ifdef CONFIG_BFT_TEST_BUILD
+    /* Test builds drive the firmware over USB without the 12V rail: always
+     * report external power so the power gate never blocks motion. */
+    return true;
+#else
     if (s_adc_handle == NULL) {
         /* Sensor not initialised — fail safe (block motion). */
         return false;
@@ -54,4 +59,5 @@ bool power_has_external(void) {
         return false;
     }
     return raw > POWER_PRESENT_THRESHOLD_RAW;
+#endif
 }

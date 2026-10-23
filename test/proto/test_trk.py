@@ -113,14 +113,14 @@ def test_tracking_stops_at_limit(proto):
     proto.action("home")
     wait_not_moving(proto)
 
-    # move RA to the positive limit (+100°)
+    # move RA to the positive limit (+150°)
     proto.control(manual_ra_dps=6.0)
     wait_not_moving(proto, timeout=40)
     pos = axis_position(proto)
-    assert pos["ra_deg"] > 99.0, f"RA not near the limit: {pos['ra_deg']}"
+    assert pos["ra_deg"] > 149.0, f"RA not near the limit: {pos['ra_deg']}"
 
     proto.control(tracking="sidereal")
     time.sleep(2.0)
     assert proto.state()["tracking"] == "none", "tracking did not stop at the limit"
     pos2 = axis_position(proto)
-    assert pos2["ra_deg"] <= 100.0 + 0.1, f"RA passed the limit: {pos2['ra_deg']}"
+    assert pos2["ra_deg"] <= 150.0 + 0.1, f"RA passed the limit: {pos2['ra_deg']}"

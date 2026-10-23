@@ -113,7 +113,17 @@ class ProtoClient:
 
     # ── message families ─────────────────────────────────────────
     def capabilities(self):
-        return self._expect_ok(self.request({"type": "capabilities"}))
+        resp = self._expect_ok(self.request({"type": "capabilities"}))
+        # Flatten the nested "capabilities" object and normalise boot_id (a hex
+        # string in capabilities) to int so it matches the state frame.
+        out = {k: v for k, v in resp.items() if k != "capabilities"}
+        nested = resp.get("capabilities")
+        if isinstance(nested, dict):
+            out.update(nested)
+        bid = out.get("boot_id")
+        if isinstance(bid, str):
+            out["boot_id"] = int(bid, 16)
+        return out
 
     def state(self):
         return self._expect_ok(self.request({"type": "state"}))

@@ -11,10 +11,6 @@
 #include "esp_timer.h"
 #include "power.h"
 
-static const char *pier_side_name(int pier_side) {
-    return pier_side == 0 ? "east" : "west";
-}
-
 void proto_state_snapshot(char *out, size_t cap, uint32_t id) {
     MotorsState s = motors_current_state();
     float ra_axis = motors_steps_to_deg(s.ra_steps);
@@ -23,7 +19,6 @@ void proto_state_snapshot(char *out, size_t cap, uint32_t id) {
     AxisCoordinates axis = { .ra_axis_deg = ra_axis, .dec_axis_deg = dec_axis };
     EquatorialCoordinates eq = axis_to_equatorial(axis);
 
-    int pier = (dec_axis >= 0.0f) ? 0 : 1;
     bool at_home = (s.status == MOTORS_STATUS_READY)
                 && fabsf(ra_axis) < 1.0f
                 && fabsf(dec_axis) < 1.0f;
@@ -44,10 +39,10 @@ void proto_state_snapshot(char *out, size_t cap, uint32_t id) {
     proto_buf_append(out, cap, &len,
         "\"ra_steps\":%lld,\"dec_steps\":%lld,"
         "\"ra_axis_deg\":%.4f,\"dec_axis_deg\":%.4f,"
-        "\"ra\":%.4f,\"dec\":%.4f,\"lst\":%.4f,\"pier_side\":\"%s\",",
+        "\"ra\":%.4f,\"dec\":%.4f,\"lst\":%.4f,\"pier_side\":\"unknown\",",
         (long long) s.ra_steps, (long long) s.dec_steps,
         ra_axis, dec_axis,
-        eq.ra_hours, eq.dec_deg, mount_get_lst(), pier_side_name(pier));
+        eq.ra_hours, eq.dec_deg, mount_get_lst());
 
     proto_buf_append(out, cap, &len,
         "\"ra_speed_dps\":%.6f,\"dec_speed_dps\":%.6f,"

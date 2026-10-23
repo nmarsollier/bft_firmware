@@ -94,7 +94,7 @@ def test_change_rate_without_release(proto):
     wait_not_moving(proto)
 
 
-@pytest.mark.parametrize("axis,limit", [(0, 100.0), (1, 150.0)])
+@pytest.mark.parametrize("axis,limit", [(0, 150.0), (1, 150.0)])
 def test_move_axis_limit(proto, axis, limit):
     """MoveAxis stops at the axis limit, never passes it, and moves back."""
     proto.action("home")

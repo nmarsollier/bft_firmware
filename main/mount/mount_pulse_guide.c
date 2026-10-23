@@ -5,10 +5,10 @@
  * and delegate to the motors layer.
  *
  * Direction mapping (offset added to base tracking speed):
- *   East  → +RA  (move scope east relative to sky)
- *   West  → -RA  (move scope west relative to sky)
- *   North → +DEC
- *   South → -DEC
+ *   East  → -RA  (move scope east relative to sky)
+ *   West  → +RA  (move scope west relative to sky)
+ *   North → +DEC for positive DEC orientation, -DEC for negative
+ *   South → the opposite of North
  */
 #include "mount.h"
 #include "mount_internal.h"
@@ -53,12 +53,11 @@ MountResult mount_pulse_guide(GuideDirection direction, uint32_t duration_ms) {
         break;
     case GUIDE_DIRECTION_NORTH:
     case GUIDE_DIRECTION_SOUTH: {
-        /* North (increasing celestial DEC) maps to +mechanical DEC on the
-         * east side of the pier (dec_axis >= 0) and to -mechanical DEC on the
-         * west side (dec_axis < 0).  The pier side is encoded in the sign of
-         * the DEC axis — see axis_to_equatorial(). */
-        float dec_axis_deg = motors_get_dec_deg();
-        float north_sign = (dec_axis_deg >= 0.0f) ? 1.0f : -1.0f;
+        /* North increases celestial DEC. The mechanical sign depends on the
+         * remembered physical orientation (positive vs through the pole),
+         * never on which side of the meridian the target occupies. */
+        float north_sign = motors_current_state().dec_orientation_negative
+                         ? -1.0f : 1.0f;
         float offset = (direction == GUIDE_DIRECTION_NORTH)
                        ?  dec_rate * north_sign
                        : -dec_rate * north_sign;

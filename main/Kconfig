@@ -1,0 +1,14 @@
+menu "BFT Mount"
+
+    config BFT_TEST_BUILD
+        bool "Test firmware build (ignore external-power gating)"
+        default n
+        help
+            Enables test-only behaviour: the external-power sensor is bypassed
+            and the motors are always treated as powered, so the firmware can
+            be driven over USB without the 12V rail connected.
+
+            Do NOT enable this on a production mount: it disables the safety
+            that prevents motion while the motors are unpowered.
+
+endmenu

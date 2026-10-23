@@ -18,11 +18,11 @@ test/proto/          serial protocol acceptance suite
   test_json.py          structural rejection of malformed JSON frames
   test_trk.py           tracking (rate coherence, limits)
   test_stp.py           stop and cancellation
-  test_got*.py          slewing (GOTO): duration, speed, sequence, sites, limits, flip, guide
+  test_got*.py          slewing (GOTO): duration, speed, sequence, sites, limits, meridian, guide
   test_man.py           manual movement (MoveAxis) + axis limits
   test_gui.py           autoguiding (PulseGuide)
   test_guide_effect.py  PulseGuide position/time effect
-  test_mer.py           pier side / meridian flip
+  test_mer.py           meridian crossing without flip
   test_prk.py           park / unpark
   test_ref.py           reference / home
   test_limits.py        runtime-changed limits
@@ -87,3 +87,10 @@ description.
 `profile.json` is the versioned profile. `null` fields block the tests that use
 them; a pending value is not a PASS. `budgets.reported_position_deg` is the
 tolerance for the reported position (not physical pointing).
+
+## Host regressions (no board movement)
+
+`python3 -m unittest discover -s test/host -v` from the repository root compiles
+and exercises the production coordinate and guiding C code with hardware
+stubs. It covers meridian continuity, orientation, limits, poles and guiding.
+The CDC suite still requires a board and is the integration acceptance step.

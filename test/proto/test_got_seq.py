@@ -18,7 +18,7 @@ def _quiet(proto):
 def test_consecutive_gotos(proto):
     """A chain of gotos each reaches its target."""
     setup_site_time(proto)
-    for ra, dec in [(6.0, -60.0), (8.0, -45.0), (10.0, -70.0), (6.0, -55.0)]:
+    for ra, dec in [(6.0, -60.0), (5.0, -45.0), (7.0, -70.0), (6.0, -55.0)]:
         m = assert_goto_duration(proto, ra, dec, SPEED_DPS)
         assert_angular_close(m["final_ra"], m["final_dec"], ra, dec, TOL, f"goto {ra}h/{dec}°")
 
@@ -51,16 +51,11 @@ def test_nina_correct_at_dec_limit(proto):
 
 
 def test_nina_correct_across_meridian(proto):
-    """A correction crossing the meridian flips the pier side."""
+    """A small correction crossing the meridian stays small on both axes."""
     setup_site_time(proto)
     lst = proto.state()["lst"]
-
-    def pier():
-        return 0 if proto.state()["pier_side"] == "east" else 1
-
-    ra_w = (lst - 1.0) % 24.0   # just west → pierEast
-    assert_goto_duration(proto, ra_w, -60.0, SPEED_DPS)
-    assert pier() == 0
-    ra_e = (lst + 1.0) % 24.0   # just east → pierWest (flip)
-    assert_goto_duration(proto, ra_e, -60.0, SPEED_DPS)
-    assert pier() == 1
+    assert_goto_duration(proto, (lst - 0.05) % 24, -60, SPEED_DPS)
+    result = assert_goto_duration(proto, (lst + 0.05) % 24, -60, SPEED_DPS)
+    assert result["ra_dist"] < 2.0
+    assert result["dec_dist"] < 0.1
+    assert abs(result["end_axis"]["dec_deg"] - 30) < 0.1

@@ -3578,6 +3578,12 @@ CONFIG_WL_SECTOR_SIZE=4096
 # end of Wear Levelling
 
 #
+# BFT Mount
+#
+CONFIG_BFT_TEST_BUILD=y
+# end of BFT Mount
+
+#
 # TinyUSB Stack
 #
 # default:
