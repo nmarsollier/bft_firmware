@@ -196,8 +196,10 @@ TrackingMode motors_tracking_from_string(const char *value);
 
 const char *motors_tracking_valid_values(void);
 
-/* Move both axes to absolute angles in degrees. */
-MotorResultCode motors_slew_to_angle(float ra_deg, float dec_deg, int speed_rate);
+/* Move both axes to absolute angles in degrees.  `home` marks the move as an
+ * explicit home so the motion task resets the DEC orientation to positive on
+ * completion. */
+MotorResultCode motors_slew_to_angle(float ra_deg, float dec_deg, int speed_rate, bool home);
 
 MotorResultCode motors_slew_axis_ra(float degrees, int speed_rate);
 

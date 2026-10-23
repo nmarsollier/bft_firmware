@@ -19,12 +19,8 @@ MotorResultCode motors_home(void) {
     }
 
     motors_stop();
-    /* An explicit home re-establishes the positive DEC orientation.  Wait for
-     * the motion task to actually leave any in-flight MoveAxis so the reset is
-     * not overwritten by a final orientation update from the aborted move. */
-    motors_motion_wait_idle();
-    portENTER_CRITICAL(&motors_state_lock);
-    motors_state.dec_orientation_negative = false;
-    portEXIT_CRITICAL(&motors_state_lock);
-    return motors_slew_to_angle(0.0f, 0.0f, 0);
+    /* The DEC orientation is reset to positive by the motion task when this
+     * home slew completes — not here, so a cancelled or rejected home leaves
+     * the orientation consistent with the physical position. */
+    return motors_slew_to_angle(0.0f, 0.0f, 0, true);
 }

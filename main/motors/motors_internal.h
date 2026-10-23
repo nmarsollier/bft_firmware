@@ -34,6 +34,9 @@ typedef struct {
     float dec_speed;
     TrackingMode tracking_mode;
     bool relative;
+    /* Marks the home slew so the motion task resets the DEC orientation to
+     * positive only when the move completes (not before, not on abort). */
+    bool home;
     float ra_delta_deg;
     float dec_delta_deg;
     /* PulseGuide fields (valid when type == MOTION_CMD_PULSE_GUIDE) */

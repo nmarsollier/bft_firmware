@@ -4,6 +4,7 @@ import time
 import pytest
 
 from client import DeviceError
+from conftest import setup_site_time, wait_not_moving
 
 DIRS = {0: "north", 1: "south", 2: "east", 3: "west"}
 
@@ -49,3 +50,24 @@ def test_guide_when_parked(proto):
     with pytest.raises(DeviceError):
         proto.action("guide", direction="north", duration_ms=100)
     proto.action("unpark")
+
+
+def test_guide_crosses_pole(proto):
+    """A guide pulse through the pole updates the orientation."""
+    setup_site_time(proto)
+    proto.action("home")
+    wait_not_moving(proto)
+
+    # Guide south from the pole: DEC moves to the negative side (crossing 0).
+    proto.config_set(guide_rate_dec=0.5)
+    proto.action("guide", direction="south", duration_ms=1000)
+    time.sleep(1.5)
+    assert proto.state()["dec_axis_deg"] < 0, \
+        f"guide did not cross the pole: dec_axis={proto.state()['dec_axis_deg']}"
+
+    # Orientation is now negative: a GOTO to DEC=-60 resolves dec_axis=-30.
+    lst = proto.state()["lst"]
+    proto.action("goto", ra=(lst + 4.0) % 24.0, dec=-60.0, speed=4)
+    wait_not_moving(proto)
+    assert proto.state()["dec_axis_deg"] < -1, \
+        f"guide cross did not update orientation: dec_axis={proto.state()['dec_axis_deg']}"

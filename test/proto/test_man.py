@@ -4,7 +4,7 @@ import time
 import pytest
 
 from client import DeviceError
-from conftest import axis_position, wait_not_moving, wait_slewing
+from conftest import axis_position, setup_site_time, wait_not_moving, wait_slewing
 
 
 @pytest.fixture(autouse=True)
@@ -124,3 +124,27 @@ def test_move_axis_limit(proto, axis, limit):
     pos2 = axis_position(proto)
     val2 = pos2["ra_deg"] if axis == 0 else pos2["dec_deg"]
     assert val2 < limit, f"axis {axis} did not move away from the limit"
+
+
+def test_relative_move_crosses_pole(proto):
+    """A relative DEC move through the pole updates the orientation."""
+    setup_site_time(proto)
+    proto.action("home")
+    wait_not_moving(proto)
+
+    # Positive side: relative move DEC +30.
+    proto.action("move", axis="dec", degrees=30.0, speed=4)
+    wait_not_moving(proto)
+    assert abs(proto.state()["dec_axis_deg"] - 30) < 1.0
+
+    # Cross the pole: +30 -> -30.
+    proto.action("move", axis="dec", degrees=-60.0, speed=4)
+    wait_not_moving(proto)
+    assert abs(proto.state()["dec_axis_deg"] + 30) < 1.0
+
+    # Orientation is now negative: a GOTO to DEC=-60 resolves dec_axis=-30.
+    lst = proto.state()["lst"]
+    proto.action("goto", ra=(lst + 4.0) % 24.0, dec=-60.0, speed=4)
+    wait_not_moving(proto)
+    assert proto.state()["dec_axis_deg"] < -1, \
+        f"relative cross did not update orientation: dec_axis={proto.state()['dec_axis_deg']}"

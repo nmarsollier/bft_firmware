@@ -76,3 +76,36 @@ def test_find_home_mid_goto(proto):
     pos = axis_position(proto)
     assert abs(pos["ra_deg"]) < 1.0 and abs(pos["dec_deg"]) < 1.0, \
         f"home mid-goto no volvió a (0,0): ra={pos['ra_deg']} dec={pos['dec_deg']}"
+
+
+def test_home_interrupted_keeps_orientation(proto):
+    """A home cancelled mid-slew must not reset the DEC orientation.
+
+    From the negative side (through the pole), an interrupted home that reset
+    the orientation early would leave the reported coordinates wrong and a later
+    GOTO would flip to the positive side.  The orientation must reset only when
+    home completes.
+    """
+    setup_site_time(proto)
+    proto.action("home")
+    wait_not_moving(proto)
+
+    # Move DEC through the pole to the negative side (dec_axis < 0).
+    proto.action("move", axis="dec", degrees=-120.0, speed=4)
+    wait_not_moving(proto)
+    assert proto.state()["dec_axis_deg"] < -100, \
+        f"DEC not on the negative side: {proto.state()['dec_axis_deg']}"
+
+    # Home starts, then is cancelled before it completes.
+    proto.action("home")
+    wait_slewing(proto)
+    proto.action("stop")
+    wait_not_moving(proto)
+
+    # Orientation must still be negative: a GOTO to DEC=-60 resolves dec_axis
+    # on the negative side (-30), not the positive side (+30).
+    lst = proto.state()["lst"]
+    proto.action("goto", ra=(lst + 4.0) % 24.0, dec=-60.0, speed=4)
+    wait_not_moving(proto)
+    assert proto.state()["dec_axis_deg"] < -1, \
+        f"orientation reset by interrupted home: dec_axis={proto.state()['dec_axis_deg']}"

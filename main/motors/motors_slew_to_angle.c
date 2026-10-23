@@ -24,8 +24,9 @@ static const char *TAG = "MOTORS_SLEW_TO_ANGLE";
  *   ra_deg   — target RA axis angle in degrees (validated against limits)
  *   dec_deg  — target DEC axis angle in degrees
  *   speed_rate — slew profile (1=1°/s, 2=3°/s, 3=4.5°/s, default=6°/s)
+ *   home     — true for an explicit home (resets DEC orientation on completion)
  */
-MotorResultCode motors_slew_to_angle(float ra_deg, float dec_deg, int speed_rate) {
+MotorResultCode motors_slew_to_angle(float ra_deg, float dec_deg, int speed_rate, bool home) {
     if (motors_status_is_error(motors_state.status)) {
         return MOTOR_ERR_HARDWARE_ERROR;
     }
@@ -64,6 +65,7 @@ MotorResultCode motors_slew_to_angle(float ra_deg, float dec_deg, int speed_rate
         .dec_target_deg = dec_deg,
         .ra_speed = speed,
         .dec_speed = speed,
+        .home = home,
     };
     if (!motors_queue_put(&cmd)) {
         return MOTOR_ERR_BUSY;
