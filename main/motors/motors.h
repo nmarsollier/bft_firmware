@@ -70,14 +70,6 @@ typedef struct {
     /* True when a PulseGuide is active on either axis. */
     bool guiding;
 
-    /* Remembered physical DEC orientation, used by coordinate conversion and
-     * guiding: true = negative (through the pole), false = positive (home).
-     * Updated by the motion task on a manual move (MoveAxis) whenever DEC
-     * reaches a non-zero position, and reset to positive on home.  Preserved
-     * while dec_steps == 0 (the celestial pole) so a GOTO out of the pole
-     * keeps the previous side instead of swinging 180°. */
-    bool dec_orientation_negative;
-
     /* Operational limits enforced by the motors module. */
     struct {
         float ra_min;
@@ -136,6 +128,11 @@ float motors_get_dec_deg(void);
  * layer can derive degrees from a single coherent MotorsState snapshot rather
  * than re-reading each axis separately. */
 float motors_steps_to_deg(int64_t steps);
+
+/* Convert an axis angle in degrees to the nearest absolute microstep counter,
+ * using the active microstep resolution.  Public so the mount layer can
+ * validate a destination with the exact conversion the motion task executes. */
+int64_t motors_deg_to_steps(float degrees);
 
 /*
  * Stop both axes and return to READY.
@@ -196,10 +193,8 @@ TrackingMode motors_tracking_from_string(const char *value);
 
 const char *motors_tracking_valid_values(void);
 
-/* Move both axes to absolute angles in degrees.  `home` marks the move as an
- * explicit home so the motion task resets the DEC orientation to positive on
- * completion. */
-MotorResultCode motors_slew_to_angle(float ra_deg, float dec_deg, int speed_rate, bool home);
+/* Move both axes to absolute angles in degrees. */
+MotorResultCode motors_slew_to_angle(float ra_deg, float dec_deg, int speed_rate);
 
 MotorResultCode motors_slew_axis_ra(float degrees, int speed_rate);
 

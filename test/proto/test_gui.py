@@ -16,15 +16,30 @@ def _quiet(proto):
     proto.control(tracking="none")
 
 
-@pytest.mark.parametrize("direction", [0, 1, 2, 3])
-def test_pulse_guide_directions(proto, direction):
-    """ACTION guide accepts the four celestial directions."""
-    proto.action("guide", direction=DIRS[direction], duration_ms=100)
+def _move_dec(proto, degrees):
+    proto.action("move", axis="dec", degrees=degrees, speed=4)
+    wait_not_moving(proto)
+
+
+def test_pulse_guide_east_west(proto):
+    """ACTION guide accepts the RA (east/west) directions anywhere, including
+    at the pole (a mechanical rotation, no celestial N/S ambiguity)."""
+    proto.action("guide", direction="east", duration_ms=100)
+    proto.action("guide", direction="west", duration_ms=100)
+    assert proto.state()["guiding"] in (True, False)
+
+
+def test_pulse_guide_north_south(proto):
+    """ACTION guide accepts N/S away from the pole."""
+    _move_dec(proto, 30.0)
+    proto.action("guide", direction="north", duration_ms=100)
+    proto.action("guide", direction="south", duration_ms=100)
     assert proto.state()["guiding"] in (True, False)
 
 
 def test_pulse_duration_controls_correction(proto):
     """A pulse of valid duration ends (guiding becomes false)."""
+    _move_dec(proto, 30.0)
     proto.action("guide", direction="north", duration_ms=300)
     time.sleep(0.5)
     assert proto.state()["guiding"] is False
@@ -40,6 +55,7 @@ def test_set_guide_rates(proto):
 
 def test_guide_ra_and_dec(proto):
     """Guide simultaneously in RA and DEC (both axes accepted)."""
+    _move_dec(proto, 30.0)
     proto.action("guide", direction="north", duration_ms=200)
     proto.action("guide", direction="east", duration_ms=200)
 
@@ -52,22 +68,17 @@ def test_guide_when_parked(proto):
     proto.action("unpark")
 
 
-def test_guide_crosses_pole(proto):
-    """A guide pulse through the pole updates the orientation."""
+def test_guide_at_pole_rejected(proto):
+    """A N/S guide at the celestial pole is rejected without moving; E/W is
+    allowed as a mechanical rotation."""
     setup_site_time(proto)
     proto.action("home")
     wait_not_moving(proto)
 
-    # Guide south from the pole: DEC moves to the negative side (crossing 0).
     proto.config_set(guide_rate_dec=0.5)
-    proto.action("guide", direction="south", duration_ms=1000)
-    time.sleep(1.5)
-    assert proto.state()["dec_axis_deg"] < 0, \
-        f"guide did not cross the pole: dec_axis={proto.state()['dec_axis_deg']}"
-
-    # Orientation is now negative: a GOTO to DEC=-60 resolves dec_axis=-30.
-    lst = proto.state()["lst"]
-    proto.action("goto", ra=(lst + 4.0) % 24.0, dec=-60.0, speed=4)
-    wait_not_moving(proto)
-    assert proto.state()["dec_axis_deg"] < -1, \
-        f"guide cross did not update orientation: dec_axis={proto.state()['dec_axis_deg']}"
+    with pytest.raises(DeviceError):
+        proto.action("guide", direction="north", duration_ms=100)
+    with pytest.raises(DeviceError):
+        proto.action("guide", direction="south", duration_ms=100)
+    proto.action("guide", direction="east", duration_ms=100)
+    proto.action("guide", direction="west", duration_ms=100)

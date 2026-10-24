@@ -9,18 +9,25 @@
 
 /*
  * Current RA in decimal hours, read directly from the authoritative
- * motor position (axis degrees).  RA hour = axis_deg / 15.
+ * motor position (axis degrees) converted with the current site and a
+ * single coherent time snapshot.
  */
 float mount_get_ra_hours(void) {
     AxisCoordinates axis = {.ra_axis_deg = motors_get_ra_deg(),
                             .dec_axis_deg = motors_get_dec_deg()};
-    return axis_to_equatorial(axis).ra_hours;
+    return axis_to_equatorial(axis, mount_internal_state.lat,
+                              mount_internal_state.lon, mount_unix_now()).ra_hours;
 }
 
 float mount_get_dec_deg(void) {
     AxisCoordinates axis = {.ra_axis_deg = motors_get_ra_deg(),
                             .dec_axis_deg = motors_get_dec_deg()};
-    return axis_to_equatorial(axis).dec_deg;
+    return axis_to_equatorial(axis, mount_internal_state.lat,
+                              mount_internal_state.lon, mount_unix_now()).dec_deg;
+}
+
+MountSettings mount_get_settings(void) {
+    return mount_internal_state;
 }
 
 MountResult mount_result_error(const char *message) {

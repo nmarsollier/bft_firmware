@@ -1,19 +1,24 @@
 /* Mount - mount_pulse_guide.c
  *
  * Purpose: validate mount state for PulseGuide, map astronomical
- * directions (North/South/East/West) to signed RA/DEC speed offsets,
- * and delegate to the motors layer.
+ * directions (North/South/East/West) to signed RA/DEC speed offsets from the
+ * current mechanical position, and delegate to the motors layer.
  *
  * Direction mapping (offset added to base tracking speed):
- *   East  → -RA  (move scope east relative to sky)
- *   West  → +RA  (move scope west relative to sky)
- *   North → +DEC for positive DEC orientation, -DEC for negative
- *   South → the opposite of North
+ *   East  → -RA  (increase α = decrease H = decrease R)
+ *   West  → +RA
+ *   North → increase δ; the mechanical DEC sign is the derivative of the
+ *           conversion at the current position: dδ/dD = -p·sign(sin D),
+ *           with p = +1 north / -1 south. It depends on the instantaneous
+ *           geometry, never on remembered history.
+ *   South → the opposite of North.
  */
 #include "mount.h"
 #include "mount_internal.h"
 
 #include "motors.h"
+
+#include <math.h>
 
 #include "esp_log.h"
 
@@ -39,28 +44,44 @@ MountResult mount_pulse_guide(GuideDirection direction, uint32_t duration_ms) {
 
     float ra_rate = mount_get_guide_rate_ra();
     float dec_rate = mount_get_guide_rate_dec();
+    float p = (mount_internal_state.lat > 0.0f) ? 1.0f : -1.0f;
 
     MotorResultCode rc;
     switch (direction) {
     case GUIDE_DIRECTION_EAST:
-        /* +mechanical RA reduces celestial RA (RA = LST - HA, HA grows with
-         * RA axis), i.e. it moves west.  So east is -mechanical RA.
-         * See axis_to_equatorial(). */
+        /* East moves the scope east relative to the sky: increase α, which is
+         * -H = -R.  Mechanical RA offset is negative. */
         rc = motors_pulse_guide_start(0, -ra_rate, duration_ms);
         break;
     case GUIDE_DIRECTION_WEST:
-        rc = motors_pulse_guide_start(0,  ra_rate, duration_ms);
+        rc = motors_pulse_guide_start(0, ra_rate, duration_ms);
         break;
     case GUIDE_DIRECTION_NORTH:
     case GUIDE_DIRECTION_SOUTH: {
-        /* North increases celestial DEC. The mechanical sign depends on the
-         * remembered physical orientation (positive vs through the pole),
-         * never on which side of the meridian the target occupies. */
-        float north_sign = motors_current_state().dec_orientation_negative
-                         ? -1.0f : 1.0f;
+        /* North increases celestial δ. The mechanical DEC sign is dδ/dD at the
+         * current position = -p·sign(sin D). */
+        float dec_axis = motors_get_dec_deg();
+        float sD = sinf(dec_axis * (float) M_PI / 180.0f);
+        float north_sign = (sD >= 0.0f ? 1.0f : -1.0f) * (-p);
         float offset = (direction == GUIDE_DIRECTION_NORTH)
-                       ?  dec_rate * north_sign
+                       ? dec_rate * north_sign
                        : -dec_rate * north_sign;
+
+        /* Reject a pulse whose signed DEC excursion reaches or crosses a
+         * celestial pole (D = 180°·n), without executing any part of it. */
+        float arc_deg = offset * (duration_ms / 1000.0f);
+        float pole_eps = motors_steps_to_deg(1);   /* one microstep */
+        float d_start = dec_axis;
+        float d_end = dec_axis + arc_deg;
+        float a = fminf(d_start, d_end) - pole_eps;
+        float b = fmaxf(d_start, d_end) + pole_eps;
+        int n_lo = (int) ceilf(a / 180.0f);
+        int n_hi = (int) floorf(b / 180.0f);
+        if (n_lo <= n_hi) {
+            ESP_LOGW(TAG, "Rejected: DEC pulse crosses the celestial pole");
+            return mount_result_error("Guide would cross the pole");
+        }
+
         rc = motors_pulse_guide_start(1, offset, duration_ms);
         break;
     }

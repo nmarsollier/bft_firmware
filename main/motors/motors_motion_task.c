@@ -87,7 +87,6 @@ static struct {
     int64_t dec_target;        /* steps */
     int64_t ra_start;          /* steps — captured at motion start (for ramps) */
     int64_t dec_start;         /* steps */
-    bool home;                 /* true while running the home slew */
 
     /* PulseGuide state — single-writer (motion task only). */
     int64_t ra_guide_deadline_us;
@@ -449,12 +448,6 @@ static bool check_motion_conditions(void) {
         portENTER_CRITICAL(&motors_state_lock);
         motors_state.status = MOTORS_STATUS_READY;
         motors_state.tracking = TRACKING_NONE;
-        /* Home completes here: re-establish the positive DEC orientation only
-         * now that the axes actually reached (0,0).  A cancelled or rejected
-         * home never reaches this point. */
-        if (s_motion.home) {
-            motors_state.dec_orientation_negative = false;
-        }
         portEXIT_CRITICAL(&motors_state_lock);
         s_motion.active = false;
 
@@ -510,7 +503,6 @@ static void process_command(MotionCommand cmd) {
     }
 
     s_motion.active_cmd_type = cmd.type;
-    s_motion.home = (cmd.type == MOTION_CMD_SLEW) && cmd.home;
 
     switch (cmd.type) {
         case MOTION_CMD_SLEW:
@@ -907,12 +899,6 @@ static void slewing_loop_rmt(void) {
             && motors_rmt_try_wait_dec()) {
             if (!s_motion.active) break;
             motors_state.dec_steps += (int64_t)dec_sign * (int64_t)dec_batch[dec_ping];
-            /* Any motion path (GOTO, relative move, MoveAxis) that reaches a
-             * non-zero DEC position re-derives the remembered orientation from
-             * its sign; zero (the pole) preserves it. */
-            if (motors_state.dec_steps != 0) {
-                motors_state.dec_orientation_negative = (motors_state.dec_steps < 0);
-            }
             dec_steps_done += dec_batch[dec_ping];
 
             int64_t dec_proj_trav = (int64_t)dec_sign
@@ -1148,9 +1134,6 @@ static void tracking_loop_rmt(void) {
             if (!s_motion.active) { dec_phase = 0.0; return; }
 
             motors_state.dec_steps = next;
-            if (motors_state.dec_steps != 0) {
-                motors_state.dec_orientation_negative = (motors_state.dec_steps < 0);
-            }
             dec_phase -= 1.0;
         }
         while (dec_phase <= -1.0) {
@@ -1193,9 +1176,6 @@ static void tracking_loop_rmt(void) {
             if (!s_motion.active) { dec_phase = 0.0; return; }
 
             motors_state.dec_steps = next;
-            if (motors_state.dec_steps != 0) {
-                motors_state.dec_orientation_negative = (motors_state.dec_steps < 0);
-            }
             dec_phase += 1.0;
         }
 

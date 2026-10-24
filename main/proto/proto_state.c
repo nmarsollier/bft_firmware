@@ -7,6 +7,7 @@
 #include "proto_internal.h"
 
 #include <math.h>
+#include <sys/time.h>
 
 #include "esp_timer.h"
 #include "power.h"
@@ -17,7 +18,14 @@ void proto_state_snapshot(char *out, size_t cap, uint32_t id) {
     float dec_axis = motors_steps_to_deg(s.dec_steps);
 
     AxisCoordinates axis = { .ra_axis_deg = ra_axis, .dec_axis_deg = dec_axis };
-    EquatorialCoordinates eq = axis_to_equatorial(axis);
+    /* Coherent snapshot: one site + one fractional instant for both the
+     * conversion and the reported LST. */
+    MountSettings cfg = mount_get_settings();
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    double now = (double) tv.tv_sec + (double) tv.tv_usec / 1e6;
+    EquatorialCoordinates eq = axis_to_equatorial(axis, cfg.lat, cfg.lon, now);
+    float lst = mount_get_lst_at(cfg.lon, now);
 
     bool at_home = (s.status == MOTORS_STATUS_READY)
                 && fabsf(ra_axis) < 1.0f
@@ -42,7 +50,7 @@ void proto_state_snapshot(char *out, size_t cap, uint32_t id) {
         "\"ra\":%.4f,\"dec\":%.4f,\"lst\":%.4f,\"pier_side\":\"unknown\",",
         (long long) s.ra_steps, (long long) s.dec_steps,
         ra_axis, dec_axis,
-        eq.ra_hours, eq.dec_deg, mount_get_lst());
+        eq.ra_hours, eq.dec_deg, lst);
 
     proto_buf_append(out, cap, &len,
         "\"ra_speed_dps\":%.6f,\"dec_speed_dps\":%.6f,"

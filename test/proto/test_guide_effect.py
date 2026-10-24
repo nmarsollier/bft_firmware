@@ -6,11 +6,16 @@ import pytest
 from conftest import axis_position, setup_site_time, wait_not_moving
 
 GUIDE_RATE = 0.5          # deg/s
-DEG_PER_STEP = 1.8 / (64 * 300)
+DEG_PER_STEP = 1.8 / (32 * 500)   # 32 microsteps × 500:1 reduction
 
 
 def _set_guide_rate(proto, rate):
     proto.config_set(guide_rate_ra=rate, guide_rate_dec=rate)
+
+
+def _move_dec(proto, degrees):
+    proto.action("move", axis="dec", degrees=degrees, speed=4)
+    wait_not_moving(proto)
 
 
 def _measure_pulse(proto, direction, duration_ms):
@@ -30,6 +35,7 @@ def _quiet(proto):
 
 def test_pulse_effect_magnitude(proto):
     """A DEC pulse moves the axis by rate × duration."""
+    _move_dec(proto, 30.0)          # away from the pole (D=30)
     _set_guide_rate(proto, GUIDE_RATE)
     before, after = _measure_pulse(proto, "north", 500)
     change_steps = after["dec_steps"] - before["dec_steps"]
@@ -46,23 +52,28 @@ def test_pulse_east_moves_ra_negative(proto):
     assert after["ra_steps"] < before["ra_steps"], "East pulse did not move RA negative"
 
 
-def test_pulse_across_meridian_keeps_dec_direction(proto):
-    """A North pulse keeps the same DEC direction across the meridian."""
+def test_pulse_north_follows_dec_side(proto):
+    """North increases celestial DEC: +D on the positive side, -D on the
+    negative side. The mechanical sign follows the current geometry, not any
+    remembered orientation, so it flips when the minimum-travel GOTO lands on
+    the other side of the pole."""
     setup_site_time(proto)
     _set_guide_rate(proto, GUIDE_RATE)
     lst = proto.state()["lst"]
 
-    ra_west = (lst - 4.0) % 24.0   # west of meridian
+    ra_west = (lst - 4.0) % 24.0   # west of meridian -> family A (D=+30)
     proto.action("goto", ra=ra_west, dec=-60.0, speed=4)
     wait_not_moving(proto)
     b1, a1 = _measure_pulse(proto, "north", 500)
-    assert a1["dec_steps"] > b1["dec_steps"], "North should increase dec_axis west of meridian"
+    assert a1["dec_steps"] > b1["dec_steps"], \
+        "North should increase dec_axis on the positive side"
 
-    ra_east = (lst + 4.0) % 24.0   # east of meridian
+    ra_east = (lst + 4.0) % 24.0   # east of meridian -> family B (D=-30)
     proto.action("goto", ra=ra_east, dec=-60.0, speed=4)
     wait_not_moving(proto)
     b2, a2 = _measure_pulse(proto, "north", 500)
-    assert a2["dec_steps"] > b2["dec_steps"], "North should increase dec_axis east of meridian"
+    assert a2["dec_steps"] < b2["dec_steps"], \
+        "North should decrease dec_axis on the negative side"
 
 
 def test_pulse_at_dec_limit_clamped(proto):
@@ -70,7 +81,7 @@ def test_pulse_at_dec_limit_clamped(proto):
     setup_site_time(proto)
     _set_guide_rate(proto, GUIDE_RATE)
     lst = proto.state()["lst"]
-    proto.action("goto", ra=lst, dec=60.0, speed=4)   # DEC axis = ±150 (limit)
+    proto.action("goto", ra=lst, dec=60.0, speed=4)   # DEC axis = +150 (limit)
     wait_not_moving(proto)
 
     before, after = _measure_pulse(proto, "north", 500)
@@ -90,6 +101,7 @@ def test_pulse_tracking_modes(proto, tracking, rate):
     setup_site_time(proto)
     proto.action("home")          # start from a known position, away from limits
     wait_not_moving(proto)
+    _move_dec(proto, 30.0)        # away from the pole
     _set_guide_rate(proto, GUIDE_RATE)
     if tracking:
         proto.control(tracking=MODES[rate])

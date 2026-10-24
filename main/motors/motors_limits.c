@@ -79,7 +79,6 @@ void motors_set_current_as_home(void) {
     portENTER_CRITICAL(&motors_state_lock);
     motors_state.ra_steps  = 0;
     motors_state.dec_steps = 0;
-    motors_state.dec_orientation_negative = false;
     motors_state.status    = MOTORS_STATUS_READY;
     portEXIT_CRITICAL(&motors_state_lock);
     motors_limits_save();

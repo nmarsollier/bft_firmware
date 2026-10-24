@@ -22,6 +22,10 @@ def test_prolonged_mixed_session(proto):
     proto.control(tracking="sidereal")
     wait_tracking(proto, "sidereal")
 
+    # Move DEC off the pole so the N/S guide pulse is valid.
+    proto.action("move", axis="dec", degrees=30.0, speed=4)
+    wait_not_moving(proto)
+
     proto.config_set(guide_rate_dec=0.5)
     proto.action("guide", direction="north", duration_ms=300)
 

@@ -14,7 +14,9 @@ VisibleStatusData mount_get_visible_status(void) {
         .dec_axis_deg = motors_get_dec_deg()
     };
 
-    EquatorialCoordinates eq = axis_to_equatorial(axis);
+    double now = mount_unix_now();
+    EquatorialCoordinates eq = axis_to_equatorial(axis, mount_internal_state.lat,
+                                                  mount_internal_state.lon, now);
 
     return (VisibleStatusData)
     {
@@ -22,7 +24,7 @@ VisibleStatusData mount_get_visible_status(void) {
         .tracking = pos.tracking,
         .ra = ra_hours_to_hms(eq.ra_hours),
         .dec = dec_deg_to_dms(eq.dec_deg),
-        .lst_hours = mount_get_lst(),
+        .lst_hours = mount_get_lst_at(mount_internal_state.lon, now),
         .settings = mount_internal_state,
     };
 }

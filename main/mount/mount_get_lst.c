@@ -1,6 +1,7 @@
 /* Mount - mount_get_lst.c
  *
- * Purpose: compute the current Local Sidereal Time for the configured site.
+ * Purpose: compute the Local Sidereal Time for a site longitude and a
+ * fractional unix instant.
  */
 #include "mount.h"
 #include "mount_internal.h"
@@ -22,19 +23,23 @@ static double gmst_hours(double jd) {
     return gmst_deg / 15.0;
 }
 
-float mount_get_lst(void) {
-    /* Fractional-second clock — avoids the ~15"/s sawtooth in reported RA. */
+/* Fractional unix instant (seconds with sub-second precision).  Used by the
+ * pure conversions and status reporting so a coherent snapshot does not mix
+ * instants (the integer-only time_t would introduce a ~15"/s RA sawtooth). */
+double mount_unix_now(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    double now = (double) tv.tv_sec + (double) tv.tv_usec / 1e6;
+    return (double) tv.tv_sec + (double) tv.tv_usec / 1e6;
+}
 
-    double jd = jd_from_unix(now);
-    double gmst_h = gmst_hours(jd);
-    double lst_h = gmst_h + (mount_internal_state.lon / 15.0);
-
-    /* Normalize to [0, 24). */
-    while (lst_h < 0.0)  lst_h += 24.0;
-    while (lst_h >= 24.0) lst_h -= 24.0;
-
+float mount_get_lst_at(float lon, double unix_seconds) {
+    double gmst_h = gmst_hours(jd_from_unix(unix_seconds));
+    double lst_h = gmst_h + (lon / 15.0);
+    lst_h = fmod(lst_h, 24.0);
+    if (lst_h < 0.0) lst_h += 24.0;
     return (float) lst_h;
+}
+
+float mount_get_lst(void) {
+    return mount_get_lst_at(mount_internal_state.lon, mount_unix_now());
 }

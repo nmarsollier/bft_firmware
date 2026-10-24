@@ -64,11 +64,16 @@ typedef struct {
     MountSettings settings;
 } VisibleStatusData;
 
-/* Conversion functions between equatorial and physical axis coordinates. */
+/* Conversion functions between equatorial and physical axis coordinates.
+ * Pure: they take the site (latitude/longitude) and a fractional unix instant
+ * explicitly, never reading global state, so the same inputs always produce
+ * the same output regardless of how the mount reached a position. */
 bool equatorial_to_axis(EquatorialCoordinates eq, AxisCoordinates current,
-                        time_t at_time, AxisCoordinates *out);
+                        float lat, float lon, double unix_seconds,
+                        AxisCoordinates *out);
 
-EquatorialCoordinates axis_to_equatorial(AxisCoordinates axis);
+EquatorialCoordinates axis_to_equatorial(AxisCoordinates axis, float lat,
+                                         float lon, double unix_seconds);
 
 /* Convert decimal RA hours to HMS and DEC degrees to DMS. */
 RaHMS ra_hours_to_hms(float ra_hours);
@@ -198,6 +203,12 @@ float mount_get_dec_deg(void);
 
 /* Compute the current Local Sidereal Time for the configured site. */
 float mount_get_lst(void);
+
+/* Pure LST for a site longitude and a fractional unix instant (hours, [0,24)). */
+float mount_get_lst_at(float lon, double unix_seconds);
+
+/* Current persisted site settings (latitude, longitude, elevation). */
+MountSettings mount_get_settings(void);
 
 /*
  * mount_pulse_guide

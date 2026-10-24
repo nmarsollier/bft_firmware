@@ -34,9 +34,6 @@ typedef struct {
     float dec_speed;
     TrackingMode tracking_mode;
     bool relative;
-    /* Marks the home slew so the motion task resets the DEC orientation to
-     * positive only when the move completes (not before, not on abort). */
-    bool home;
     float ra_delta_deg;
     float dec_delta_deg;
     /* PulseGuide fields (valid when type == MOTION_CMD_PULSE_GUIDE) */
@@ -145,11 +142,6 @@ void motors_hw_set_direction_dec(MotorDirection direction);
 /* Convert between steps and degrees using the active microstep resolution.
  * Defined in motors_current_state.c; declared public in motors.h. */
 float motors_steps_to_deg(int64_t steps);
-
-static inline int64_t motors_deg_to_steps(float degrees) {
-    float deg_per_step = motors_get_deg_per_microstep();
-    return (int64_t)(degrees / deg_per_step + (degrees >= 0.0f ? 0.5f : -0.5f));
-}
 
 esp_err_t motors_rmt_init(void);
 

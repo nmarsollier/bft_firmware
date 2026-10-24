@@ -13,20 +13,21 @@ def _quiet(proto):
     proto.control(tracking="none")
 
 
-def test_meridian_crossing_without_flip(proto):
-    """Both sides of the meridian use positive DEC and the expected RA."""
+def test_meridian_crossing_uses_min_travel(proto):
+    """Crossing the meridian at the same instant picks the minimum-travel
+    solution, not a remembered orientation side."""
     setup_site_time(proto)
     lst = proto.state()["lst"]
 
-    ra_west = (lst - 4.0) % 24.0   # HA = +4h
+    ra_west = (lst - 4.0) % 24.0   # HA = +4h -> family A (60, 30)
     assert_goto_duration(proto, ra_west, -60.0, SPEED_DPS)
     assert abs(proto.state()["dec_axis_deg"] - 30) < 0.1
     assert 59 < proto.state()["ra_axis_deg"] < 61
 
-    ra_east = (lst + 4.0) % 24.0   # HA = -4h
+    ra_east = (lst + 4.0) % 24.0   # HA = -4h -> family B (120, -30) is shorter
     assert_goto_duration(proto, ra_east, -60.0, SPEED_DPS)
-    assert abs(proto.state()["dec_axis_deg"] - 30) < 0.1
-    assert -61 < proto.state()["ra_axis_deg"] < -59
+    assert abs(proto.state()["dec_axis_deg"] + 30) < 0.1
+    assert 119 < proto.state()["ra_axis_deg"] < 121
 
 
 def test_goto_near_meridian(proto):

@@ -1,241 +1,260 @@
 /* Mount - mount_coordinate_tools.c
  *
  * Purpose: convert between physical axis coordinates and equatorial
- * coordinates for a fork equatorial mount in the southern hemisphere.
+ * coordinates for a polar-aligned equatorial mount in either hemisphere.
  *
- * =========================================================================
- * MECHANICAL MODEL
- * =========================================================================
+ * The conversions are pure functions of the supplied axis position, site
+ * (latitude/longitude), a fractional unix instant, and — for the reverse
+ * direction — the configured mechanical limits (a snapshot). They never read
+ * mutable global state, so the same inputs always produce the same output
+ * regardless of how the mount reached a position.
  *
- * Home position (mechanical zero):
- *   - Scope points at the South Celestial Pole (SCP).
- *   - ra_axis = 0, dec_axis = 0.
- *   - Reported celestial coordinates: RA = LST, DEC = -90.
+ * Mechanical conventions:
+ *   R = ra_axis_deg, D = dec_axis_deg (absolute final-axis angles, D linear).
+ *   Home (R=0, D=0) points at the reference pole:
+ *       southern hemisphere (lat < 0): South Celestial Pole, dec = -90.
+ *       northern hemisphere (lat > 0): North Celestial Pole, dec = +90.
+ *   R positive moves the pointing west and increases the hour angle (H = R).
  *
- * In a fork mount the DEC movement plane is already aligned with the
- * meridian at mechanical home: moving only DEC sweeps the scope toward
- * the zenith with no RA pre-rotation.  A German EQ needs RA at roughly
- * +/-90 from home to achieve the same alignment.
+ * The reference pole is selected by the latitude sign:
+ *   p = +1 north (lat > 0), -1 south (lat <= 0). lat == 0 uses the southern
+ *   convention (documented and covered by a test).
  *
- * The hour-angle offset at which the DEC plane aligns with the meridian
- * is a fixed mechanical constant: HOME_HA_OFFSET_DEG = 0 (90 for a
- * German EQ).
+ * Forward (axis -> equatorial), with Z toward the north celestial pole, X
+ * toward H=0/dec=0, Y toward H=+90/dec=0:
+ *   x = sin(D) cos(R);  y = sin(D) sin(R);  z = p cos(D)
+ *   dec = atan2(z, hypot(x,y));  H = atan2(y,x);  ra = LST - H/15
  *
- * =========================================================================
- * FORK ORIENTATION
- * =========================================================================
+ * Reverse (equatorial -> axis) enumerates the two geometric families
+ *   (A: R = H + 360k,  D = +c + 360m;
+ *    B: R = H+180 + 360k, D = -c + 360m,  with c = 90 - p*dec)
+ * and picks the minimum |dR| + |dD| from the current position. At a celestial
+ * pole (dec = ±90) the RA is indeterminate: the current R is kept and the
+ * representation of the REQUESTED pole with the least DEC travel is chosen.
  *
- * A fork mount has no side of pier and no meridian flip.  GOTO preserves the
- * physical DEC orientation: positive at home, negative only when the telescope
- * was moved through the pole by hand.  It never selects the opposite
- * orientation to reach a target.
- *
- *   positive DEC: ra = HA,       dec =  DEC + 90
- *   negative DEC: ra = HA + 180, dec = -(DEC + 90)
- *
- * In the negative branch the +180° converts the already-existing physical
- * orientation; it is NOT a command to flip.  DEC is a linear coordinate (not
- * wrapped): its sign is still needed for coordinate conversion and for
- * North/South guiding, even though a fork has no pier side.
- *
- * =========================================================================
- * COORDINATE SYSTEM
- * =========================================================================
- *
- * Equatorial (RA, DEC):
- *   RA  in decimal hours   [0, 24)
- *   DEC in decimal degrees  [-90, +90]   (+90 = north pole)
- *
- * Axis (ra_axis, dec_axis):
- *   ra_axis  = rotation around polar axis, degrees [-180, +180).
- *   dec_axis = tilt from polar axis, degrees, linear (NOT wrapped).
- *              0 = scope parallel to RA axis (SCP, DEC=-90).
- *              +90 = scope at celestial equator (DEC=0).
- *
- * Hour Angle (HA):
- *   HA = LST - RA   (hours, wrapped to [-12, +12))
- *   HA > 0  ->  target is west of the meridian.
- *   HA < 0  ->  target is east of the meridian.
- *
- * =========================================================================
- * CONSTANTS
- * =========================================================================
- *
- * HOME_HA_OFFSET_DEG (0.0)
- *   Hour-angle offset at which the DEC plane aligns with the meridian.
- *
- * Axis limits (±150° RA, ±150° DEC) are defined in motors_limits.c
- * via motors_state.limits and validated at runtime through
- * motors_current_state().limits.
- *   When |dec_axis| < 1 the scope is at the pole; RA is singular.
- *
- * =========================================================================
- * ASTRONOMICAL FORMULAS
- * =========================================================================
- *
- * Julian Date:  JD = unix_time / 86400 + 2440587.5
- *   86400 = seconds/day.  2440587.5 = JD at Unix epoch.
- *
- * GMST (USNO, ~1 arcsec):
- *   T = (JD - 2451545.0) / 36525.0   — centuries from J2000.0
- *   GMST = 280.46061837 + 360.98564736629*(JD-2451545.0)
- *        + 0.000387933*T^2 - T^3/38710000.0   (degrees)
- *   GMST_h = GMST / 15   (hours)
- *
- * LST = GMST + lon / 15
- * HA  = LST - RA   (hours, [-12, +12))
- * RA  = LST - HA   (hours, [0, 24))
+ * When a slew speed is supplied, each candidate is advanced by the sidereal
+ * rate over its own travel time before being validated and compared, so a
+ * target whose nearest solution would drift past a limit during the move is
+ * still reached through the other solution.
  */
 #include "mount.h"
 #include "mount_internal.h"
 
 #include <math.h>
 #include <stdbool.h>
-#include <sys/time.h>
-#include <time.h>
-#include <string.h>
-#include <esp_log.h>
 
-/* --------------------------------------------------------------------------
- * Internal helpers
- * -------------------------------------------------------------------------- */
+#define MOUNT_PI             3.14159265358979323846
+#define MOUNT_POLE_SIN_EPS   1e-6    /* |sin D| < this => pole (≈0.51 microstep) */
+#define MOUNT_POLE_COS_EPS   1e-6    /* |cos dec| < this => celestial-pole target */
 
-static double unix_time_to_julian_date(double t) {
-    return t / 86400.0 + 2440587.5;
+static double deg_to_rad(double d) { return d * MOUNT_PI / 180.0; }
+static double rad_to_deg(double r) { return r * 180.0 / MOUNT_PI; }
+
+/* Normalise RA hours to [0, 24). */
+static float normalize_hours(double h) {
+    h = fmod(h, 24.0);
+    if (h < 0.0) h += 24.0;
+    return (float) h;
 }
 
-static double gmst_hours_from_jd(double jd) {
-    double T = (jd - 2451545.0) / 36525.0;
-    double gmst_deg = 280.46061837 + 360.98564736629 * (jd - 2451545.0)
-                      + 0.000387933 * T * T - (T * T * T) / 38710000.0;
-    gmst_deg = fmod(gmst_deg, 360.0);
-    if (gmst_deg < 0.0) gmst_deg += 360.0;
-    return gmst_deg / 15.0;
+/* Hemisphere pole sign: +1 north (lat > 0), -1 south (lat <= 0). */
+static double pole_sign(float lat) {
+    return (lat > 0.0f) ? 1.0 : -1.0;
 }
 
-/* Normalise a circular angle to [-180, +180).  +180 -> -180. */
-static float normalize_degf(float d) {
-    d = fmodf(d, 360.0f);
-    if (d >= 180.0f)  d -= 360.0f;
-    if (d < -180.0f)  d += 360.0f;
-    return d;
-}
-
-/* Normalise hours to [0, 24). */
-static float normalize_hoursf(float h) {
-    while (h < 0.0f)   h += 24.0f;
-    while (h >= 24.0f) h -= 24.0f;
-    return h;
-}
-
-/* Hour-angle offset at which the DEC plane aligns with the meridian.
- * Fork mount: 0 (DEC opens along the meridian at RA home).  German EQ: 90. */
-#define HOME_HA_OFFSET_DEG  0.0f
-
-/* Validate against motor hardware limits (single source of truth).
- * motors_current_state().limits defines the authoritative boundaries. */
-static bool axis_within_limits(float ra, float dec) {
-    MotorsState ms = motors_current_state();
-    return (ra >= ms.limits.ra_min && ra <= ms.limits.ra_max)
-        && (dec >= ms.limits.dec_min && dec <= ms.limits.dec_max);
-}
-
-/* --------------------------------------------------------------------------
- * Equatorial -> Axis  (forward conversion)
- *
- * Keep the current DEC orientation; reject targets outside the configured
- * travel rather than switching orientation or adding full RA revolutions.
- * -------------------------------------------------------------------------- */
-bool equatorial_to_axis(EquatorialCoordinates eq, AxisCoordinates current,
-                        time_t at_time, AxisCoordinates *out) {
-
-    if (!out || !isfinite(eq.ra_hours) || !isfinite(eq.dec_deg) ||
-        !isfinite(current.ra_axis_deg) || !isfinite(current.dec_axis_deg) ||
-        eq.dec_deg < -90.0f || eq.dec_deg > 90.0f) {
-        ESP_LOGE("COORD_CONV", "Invalid DEC %.4f — rejecting", eq.dec_deg);
-        return false;
+/* Quantize a destination angle with the motor's own degrees->steps conversion,
+ * clamp it to the nearest step whose DEGREE value stays inside
+ * [limit_min, limit_max] (the limits are never rounded outward), and write that
+ * degree to *out.  Returns false when the interval contains no representable
+ * step (lo > hi) or the float round-trip lands outside the limits. */
+static bool quantize_within(double degrees, float limit_min, float limit_max,
+                            double step, float *out) {
+    int64_t lo = (int64_t) ceil(limit_min / step);
+    int64_t hi = (int64_t) floor(limit_max / step);
+    if (lo > hi) {
+        return false;   /* interval narrower than one step: no valid step */
     }
 
-    eq.ra_hours = fmodf(eq.ra_hours, 24.0f);
-    if (eq.ra_hours < 0.0f) eq.ra_hours += 24.0f;
+    int64_t steps = motors_deg_to_steps((float) degrees);
+    if (steps < lo) steps = lo;
+    if (steps > hi) steps = hi;
 
-    double lst  = gmst_hours_from_jd(unix_time_to_julian_date(at_time))
-                  + (mount_internal_state.lon / 15.0);
-
-    float ha_h = (float)(lst - eq.ra_hours);
-    while (ha_h > 12.0f)   ha_h -= 24.0f;
-    while (ha_h < -12.0f)  ha_h += 24.0f;
-
-    float ha_deg = ha_h * 15.0f;
-    float dec_base = eq.dec_deg + 90.0f;
-
-    /* The orientation is a remembered physical state, not the current DEC sign:
-     * at dec_axis == 0 (the pole) the sign is lost, and a GOTO out of the pole
-     * must use the previous side instead of swinging 180°. */
-    bool negative_dec = motors_current_state().dec_orientation_negative;
-    float ra = normalize_degf(ha_deg - HOME_HA_OFFSET_DEG
-                             + (negative_dec ? 180.0f : 0.0f));
-    float dec = negative_dec ? -dec_base : dec_base;
-
-    /* At the celestial pole RA is arbitrary; keep the polar axis stationary. */
-    if (dec_base == 0.0f) ra = current.ra_axis_deg;
-
-    if (!axis_within_limits(ra, dec)) {
-        ESP_LOGE("COORD_CONV", "Target outside fork travel: RA=%.4fh DEC=%.4f",
-                 eq.ra_hours, eq.dec_deg);
-        return false;
+    float deg = motors_steps_to_deg(steps);
+    if (deg < limit_min || deg > limit_max) {
+        return false;   /* float round-trip landed outside the limits */
     }
 
-    out->ra_axis_deg = ra;
-    out->dec_axis_deg = dec;
-
+    *out = deg;
     return true;
 }
 
 /* --------------------------------------------------------------------------
- * Axis -> Equatorial  (reverse conversion)
- *
- * The orientation is the remembered physical state (motors_state
- * .dec_orientation_negative), not the sign of dec_axis — at dec_axis == 0 the
- * sign is ambiguous:
- *
- *   positive  ->  HA = ra + offset,       DEC = dec - 90
- *   negative  ->  HA = ra + offset + 180, DEC = -dec - 90
+ * Axis -> Equatorial  (pure forward conversion)
  * -------------------------------------------------------------------------- */
-EquatorialCoordinates axis_to_equatorial(AxisCoordinates axis) {
+EquatorialCoordinates axis_to_equatorial(AxisCoordinates axis, float lat, float lon,
+                                         double unix_seconds) {
     EquatorialCoordinates out;
+    double p = pole_sign(lat);
 
-    /* DEC is computed directly for every position.  At dec_axis == 0 (the
-     * exact pole) DEC is -90 and RA is degenerate: the formula still returns
-     * a valid, if arbitrary, RA — no threshold erases the nearby cone. */
-    float ha_deg, dec_deg;
-    if (!motors_current_state().dec_orientation_negative) {
-        /* Positive orientation: HA = ra + offset. */
-        ha_deg  = normalize_degf(axis.ra_axis_deg + HOME_HA_OFFSET_DEG);
-        dec_deg = axis.dec_axis_deg - 90.0f;
+    double R = deg_to_rad(axis.ra_axis_deg);
+    double D = deg_to_rad(axis.dec_axis_deg);
+    double sD = sin(D);
+    double x = sD * cos(R);
+    double y = sD * sin(R);
+    double z = p * cos(D);
+
+    double dec_deg = rad_to_deg(atan2(z, hypot(x, y)));
+    double lst = mount_get_lst_at(lon, unix_seconds);
+
+    double ra_hours;
+    if (fabs(sD) < MOUNT_POLE_SIN_EPS) {
+        /* Celestial pole: RA is indeterminate. Finite, deterministic convention
+         * derived from the current position: ra = LST - R/15. */
+        ra_hours = lst - axis.ra_axis_deg / 15.0;
     } else {
-        /* Negative orientation: HA = ra + offset + 180. */
-        ha_deg  = normalize_degf(axis.ra_axis_deg + HOME_HA_OFFSET_DEG + 180.0f);
-        dec_deg = -axis.dec_axis_deg - 90.0f;
+        double H = rad_to_deg(atan2(y, x));
+        ra_hours = lst - H / 15.0;
     }
 
-    float ha_h = ha_deg / 15.0f;
-
-    /* Fractional-second clock — avoids the ~15"/s sawtooth in reported RA. */
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    double now = (double) tv.tv_sec + (double) tv.tv_usec / 1e6;
-
-    double lst = gmst_hours_from_jd(unix_time_to_julian_date(now))
-                 + (mount_internal_state.lon / 15.0);
-
-    out.ra_hours = normalize_hoursf((float)(lst - ha_h));
-
-    if (dec_deg < -90.0f) dec_deg = -90.0f;
-    if (dec_deg >  90.0f) dec_deg =  90.0f;
-    out.dec_deg = dec_deg;
-
+    out.ra_hours = normalize_hours(ra_hours);
+    out.dec_deg = (float) dec_deg;
     return out;
+}
+
+/* --------------------------------------------------------------------------
+ * Equatorial -> Axis (reverse, minimum-travel selection with arrival
+ * compensation per candidate)
+ * -------------------------------------------------------------------------- */
+bool mount_select_axis_solution(EquatorialCoordinates eq, AxisCoordinates current,
+                                float lat, float lon, double unix_seconds,
+                                float speed_dps, const MountAxisLimits *limits,
+                                bool *is_pole, AxisCoordinates *out) {
+    if (!out || !limits || !isfinite(eq.ra_hours) || !isfinite(eq.dec_deg) ||
+        !isfinite(current.ra_axis_deg) || !isfinite(current.dec_axis_deg) ||
+        eq.dec_deg < -90.0f || eq.dec_deg > 90.0f) {
+        return false;
+    }
+
+    double p = pole_sign(lat);
+    double dec = eq.dec_deg;
+    double step = motors_steps_to_deg(1);   /* one microstep: tie tolerance + quantization */
+
+    /* Celestial-pole target: RA is arbitrary. Keep the current R (if valid) and
+     * pick the representation of the REQUESTED pole with the least DEC travel.
+     * A request for the north pole must not fall back to D=0 (the south pole)
+     * just because it is closer. */
+    if (fabs(cos(deg_to_rad(dec))) < MOUNT_POLE_COS_EPS) {
+        double c = 90.0 - p * dec;               /* ~0 (reference) or ~180 (opposite) */
+        double d_base = (c < 90.0) ? 0.0 : 180.0;
+        int m_min = (int) ceil((limits->dec_min - d_base) / 360.0);
+        int m_max = (int) floor((limits->dec_max - d_base) / 360.0);
+
+        double best_d = NAN, best_cost = INFINITY;
+        for (int m = m_min; m <= m_max; m++) {
+            double D = d_base + 360.0 * m;
+            double cost = fabs(D - current.dec_axis_deg);
+            if (cost < best_cost) { best_cost = cost; best_d = D; }
+        }
+        if (!isfinite(best_d)) return false;
+        if (current.ra_axis_deg < limits->ra_min || current.ra_axis_deg > limits->ra_max) {
+            return false;
+        }
+        float d_q;
+        if (!quantize_within(best_d, limits->dec_min, limits->dec_max, step, &d_q)) {
+            return false;
+        }
+        if (is_pole) *is_pole = true;
+        out->ra_axis_deg = current.ra_axis_deg;
+        out->dec_axis_deg = d_q;
+        return true;
+    }
+
+    double c = 90.0 - p * dec;
+    double alpha = fmod(eq.ra_hours, 24.0);
+    if (alpha < 0.0) alpha += 24.0;
+    double lst = mount_get_lst_at(lon, unix_seconds);
+    double H = 15.0 * (lst - alpha);   /* degrees */
+
+    bool found = false;
+    double best_cost = INFINITY, best_dr = INFINITY, best_dd = INFINITY;
+    double best_ra = NAN, best_dec = NAN;
+
+    for (int b = 0; b <= 1; b++) {
+        double r0 = H + 180.0 * b;
+        double d0 = (b == 0) ? c : -c;
+        /* The lower k bound is widened by one so a candidate whose request-time
+         * RA is just below ra_min (but whose arrival-compensated RA lands inside
+         * the limits) is still considered and filtered below. */
+        int k_min = (int) ceil((limits->ra_min - r0) / 360.0) - 1;
+        int k_max = (int) floor((limits->ra_max - r0) / 360.0);
+        int m_min = (int) ceil((limits->dec_min - d0) / 360.0);
+        int m_max = (int) floor((limits->dec_max - d0) / 360.0);
+
+        for (int k = k_min; k <= k_max; k++) {
+            double R = r0 + 360.0 * k;   /* RA axis at the request time */
+            for (int m = m_min; m <= m_max; m++) {
+                double D = d0 + 360.0 * m;
+
+                /* The sky advances during the slew: each candidate is advanced
+                 * by the sidereal rate over ITS OWN travel time, then validated
+                 * against the limits before the minimum-travel choice. */
+                double dr = fabs(R - current.ra_axis_deg);
+                double dd = fabs(D - current.dec_axis_deg);
+                double travel = (dr > dd) ? dr : dd;
+                double duration = (speed_dps > 0.0) ? travel / speed_dps + 2.0 : 0.0;
+                double R_arr = R + TRACKING_SPEED_SIDEREAL_DPS * duration;
+
+                if (R_arr < limits->ra_min || R_arr > limits->ra_max) continue;
+
+                /* Quantize with the motor's own degrees->steps conversion and
+                 * clamp to the nearest interior step; discard the candidate if
+                 * the interval holds no representable step. The cost is compared
+                 * on the float values, not the quantized ones. */
+                float R_q, D_q;
+                if (!quantize_within(R_arr, limits->ra_min, limits->ra_max, step, &R_q) ||
+                    !quantize_within(D, limits->dec_min, limits->dec_max, step, &D_q)) {
+                    continue;
+                }
+
+                double dr_arr = fabs(R_arr - current.ra_axis_deg);
+                double cost = dr_arr + dd;
+
+                bool better;
+                if (fabs(cost - best_cost) > step) {
+                    better = cost < best_cost;
+                } else if (fabs(dr_arr - best_dr) > step) {
+                    better = dr_arr < best_dr;
+                } else if (fabs(dd - best_dd) > step) {
+                    better = dd < best_dd;
+                } else {
+                    /* Fully tied: fixed order wins (A before B, k asc, m asc). */
+                    better = false;
+                }
+
+                if (better) {
+                    best_cost = cost; best_dr = dr_arr; best_dd = dd;
+                    best_ra = R_q; best_dec = D_q;
+                    found = true;
+                }
+            }
+        }
+    }
+
+    if (!found) return false;
+    if (is_pole) *is_pole = false;
+    out->ra_axis_deg = (float) best_ra;
+    out->dec_axis_deg = (float) best_dec;
+    return true;
+}
+
+bool equatorial_to_axis(EquatorialCoordinates eq, AxisCoordinates current,
+                        float lat, float lon, double unix_seconds,
+                        AxisCoordinates *out) {
+    MotorsState ms = motors_current_state();
+    MountAxisLimits limits = { ms.limits.ra_min, ms.limits.ra_max,
+                               ms.limits.dec_min, ms.limits.dec_max };
+    return mount_select_axis_solution(eq, current, lat, lon, unix_seconds,
+                                      0.0f, &limits, NULL, out);
 }
 
 /* =========================================================================
@@ -245,10 +264,10 @@ EquatorialCoordinates axis_to_equatorial(AxisCoordinates axis) {
 RaHMS ra_hours_to_hms(float ra_hours) {
     RaHMS out;
     float total = fabsf(ra_hours);
-    out.hours   = (int)total;
-    float rem   = (total - (float)out.hours) * 60.0f;
-    out.minutes = (int)rem;
-    out.seconds = (rem - (float)out.minutes) * 60.0f;
+    out.hours   = (int) total;
+    float rem   = (total - (float) out.hours) * 60.0f;
+    out.minutes = (int) rem;
+    out.seconds = (rem - (float) out.minutes) * 60.0f;
     return out;
 }
 
@@ -256,9 +275,9 @@ DecDMS dec_deg_to_dms(float dec_deg) {
     DecDMS out;
     out.sign    = (dec_deg >= 0.0f) ? 1 : -1;
     float total = fabsf(dec_deg);
-    out.degrees = (int)total;
-    float rem   = (total - (float)out.degrees) * 60.0f;
-    out.minutes = (int)rem;
-    out.seconds = (rem - (float)out.minutes) * 60.0f;
+    out.degrees = (int) total;
+    float rem   = (total - (float) out.degrees) * 60.0f;
+    out.minutes = (int) rem;
+    out.seconds = (rem - (float) out.minutes) * 60.0f;
     return out;
 }

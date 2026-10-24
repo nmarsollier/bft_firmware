@@ -19,8 +19,5 @@ MotorResultCode motors_home(void) {
     }
 
     motors_stop();
-    /* The DEC orientation is reset to positive by the motion task when this
-     * home slew completes — not here, so a cancelled or rejected home leaves
-     * the orientation consistent with the physical position. */
-    return motors_slew_to_angle(0.0f, 0.0f, 0, true);
+    return motors_slew_to_angle(0.0f, 0.0f, 0);
 }

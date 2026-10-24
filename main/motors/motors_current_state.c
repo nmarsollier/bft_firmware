@@ -26,6 +26,11 @@ float motors_steps_to_deg(int64_t steps) {
     return (float)steps * motors_get_deg_per_microstep();
 }
 
+int64_t motors_deg_to_steps(float degrees) {
+    float deg_per_step = motors_get_deg_per_microstep();
+    return (int64_t)(degrees / deg_per_step + (degrees >= 0.0f ? 0.5f : -0.5f));
+}
+
 float motors_get_ra_deg(void) {
     int64_t steps;
     portENTER_CRITICAL(&motors_state_lock);
