@@ -1,4 +1,4 @@
-# BFT — Fork Equatorial Mount
+# Big Fucking Mount
 
 Fork equatorial mount for astrophotography: the telescope sits balanced between
 the fork arms, with no counterweight and no meridian flip. An ESP32-S3 drives
@@ -65,5 +65,6 @@ Desktop gateway (Go) — Alpaca + UI
 ## Where the details live
 
 - **Pinout, microstepping and reduction**: `main/config/config.h` (single source of truth).
+- **Coordinate model**: `MOUNT.md`.
 - **Motors and drivers**: `MOTOR.md`.
 - **Serial protocol**: `main/proto/README.md`.

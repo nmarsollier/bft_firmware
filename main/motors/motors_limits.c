@@ -18,9 +18,13 @@
 static const char *TAG = "MOTORS_LIMITS";
 static const char *NVS_NS = "mount";
 
-#define LIMITS_DEFAULT_RA_MIN  -150.0f
-#define LIMITS_DEFAULT_RA_MAX   150.0f
-#define LIMITS_DEFAULT_DEC_MIN -150.0f
+/* Mechanical travel limits (degrees), sized to forbid a full revolution
+ * (cable wrap) while still covering the whole sky observable from Mendoza
+ * (lat -32.89°).  DEC is asymmetric: +150° reaches the northern horizon on
+ * the meridian; -50° suffices for the southern side. */
+#define LIMITS_DEFAULT_RA_MIN  -120.0f
+#define LIMITS_DEFAULT_RA_MAX   120.0f
+#define LIMITS_DEFAULT_DEC_MIN  -50.0f
 #define LIMITS_DEFAULT_DEC_MAX  150.0f
 
 /* ── NVS persistence ─────────────────────────────────────── */

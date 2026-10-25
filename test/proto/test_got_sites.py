@@ -19,4 +19,7 @@ def _quiet(proto):
 def test_goto_across_sites(proto, lat, lon):
     proto.config_set(lat=lat, lon=lon, elevation=750,
                      utc="2026-09-28T02:00:00Z")
-    assert_goto_duration(proto, 6.0, -60.0, 6.0)
+    # Target on the meridian (HA=0): reachable at every site regardless of the
+    # RA ±120 limit (a fixed ra=6h would fall outside ±120 at lon -74°).
+    lst = proto.state()["lst"]
+    assert_goto_duration(proto, lst, -60.0, 6.0)

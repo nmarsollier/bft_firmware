@@ -61,14 +61,14 @@ def test_pulse_north_follows_dec_side(proto):
     _set_guide_rate(proto, GUIDE_RATE)
     lst = proto.state()["lst"]
 
-    ra_west = (lst - 4.0) % 24.0   # west of meridian -> family A (D=+30)
+    ra_west = (lst - 4.0) % 24.0   # west of meridian -> positive side (D=+30)
     proto.action("goto", ra=ra_west, dec=-60.0, speed=4)
     wait_not_moving(proto)
     b1, a1 = _measure_pulse(proto, "north", 500)
     assert a1["dec_steps"] > b1["dec_steps"], \
         "North should increase dec_axis on the positive side"
 
-    ra_east = (lst + 4.0) % 24.0   # east of meridian -> family B (D=-30)
+    ra_east = (lst + 6.0) % 24.0   # HA=-6h east -> flipped equivalent (D=-30) still in RA range
     proto.action("goto", ra=ra_east, dec=-60.0, speed=4)
     wait_not_moving(proto)
     b2, a2 = _measure_pulse(proto, "north", 500)

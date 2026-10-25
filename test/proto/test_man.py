@@ -94,7 +94,7 @@ def test_change_rate_without_release(proto):
     wait_not_moving(proto)
 
 
-@pytest.mark.parametrize("axis,limit", [(0, 150.0), (1, 150.0)])
+@pytest.mark.parametrize("axis,limit", [(0, 120.0), (1, 150.0)])
 def test_move_axis_limit(proto, axis, limit):
     """MoveAxis stops at the axis limit, never passes it, and moves back."""
     proto.action("home")
@@ -143,8 +143,8 @@ def test_relative_move_crosses_pole(proto):
     wait_not_moving(proto)
     assert abs(proto.state()["dec_axis_deg"] + 30) < 1.0
 
-    # From (0,-30) the minimum-travel solution for (HA=-60, dec=-60) is family A
-    # (R=-60, D=+30): |dR|=60 beats family B's |dR|=120.
+    # From (0,-30) the minimum-travel solution for (HA=-60, dec=-60) is the
+    # unflipped (R=-60, D=+30): |dR|=60 beats the flipped equivalent's |dR|=120.
     lst = proto.state()["lst"]
     proto.action("goto", ra=(lst + 4.0) % 24.0, dec=-60.0, speed=4)
     wait_not_moving(proto)

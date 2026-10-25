@@ -89,9 +89,9 @@ def test_home_interrupted_reports_correct_coordinates(proto):
     wait_not_moving(proto)
 
     # Move DEC through the pole to the negative side (dec_axis < 0).
-    proto.action("move", axis="dec", degrees=-120.0, speed=4)
+    proto.action("move", axis="dec", degrees=-30.0, speed=4)
     wait_not_moving(proto)
-    assert proto.state()["dec_axis_deg"] < -100, \
+    assert proto.state()["dec_axis_deg"] < -20, \
         f"DEC not on the negative side: {proto.state()['dec_axis_deg']}"
 
     # Home starts, then is cancelled before it completes.

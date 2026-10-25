@@ -2,6 +2,9 @@
 
 Mantener este archivo en formato simple, para que pueda leerse y editarse rapidamente
 
+El modelo matemático de coordenadas (absolutas, sin estado de orientación) está
+documentado en `MOUNT.md`.
+
 ## Proyecto hermano (gateway Go)
 
 Este firmware se comunica por USB CDC-ACM con una app de escritorio Go que expone

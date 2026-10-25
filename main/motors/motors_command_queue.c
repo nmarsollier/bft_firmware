@@ -49,6 +49,13 @@ bool motors_queue_put(MotionCommand *cmd) {
         ESP_LOGW(TAG, "Queue full, dropping cmd type=%d", cmd->type);
         return false;
     }
+
+    /* Wake the motion task so it dequeues (and marks busy) promptly.  Use a
+     * counting notify (xTaskNotifyGive) so a notification received while the
+     * task is busy is not lost when it next blocks in ulTaskNotifyTake. */
+    if (motors_motion_task_handle) {
+        xTaskNotifyGive(motors_motion_task_handle);
+    }
     return true;
 }
 

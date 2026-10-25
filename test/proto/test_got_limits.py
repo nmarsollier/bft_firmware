@@ -13,7 +13,7 @@ def _quiet(proto):
 
 
 def test_goto_beyond_dec_limit_rejected(proto):
-    """DEC beyond the reachable range (dec_axis > ±150°) is rejected."""
+    """DEC beyond the reachable range (dec_axis > +150°) is rejected."""
     setup_site_time(proto)
     assert_goto_duration(proto, 6.0, -60.0, 6.0)
     with pytest.raises(DeviceError):
@@ -32,7 +32,7 @@ def test_goto_returns_to_valid_after_rejection(proto):
 
 
 def test_goto_to_exact_dec_limit(proto):
-    """A goto to DEC=+60° lands at the DEC axis limit (±150°) and succeeds."""
+    """A goto to DEC=+60° lands at the DEC axis limit (+150°) and succeeds."""
     from conftest import assert_angular_close
     setup_site_time(proto)
     lst = proto.state()["lst"]

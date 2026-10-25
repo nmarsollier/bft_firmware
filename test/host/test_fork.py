@@ -4,7 +4,7 @@ The conversions are now pure functions of (position, site, time), so the tests
 pass latitude/longitude/time explicitly and verify:
   - forward (axis -> equatorial) against an independent vector oracle,
   - reverse (equatorial -> axis) minimum-travel selection, both hemispheres,
-  - family A/B equivalence (same pointing),
+  - flip symmetry (same pointing),
   - pole handling (both poles + equivalent representations),
   - guiding signs derived from the current mechanical position,
   - mechanical limits and periodic equivalents.
@@ -145,8 +145,8 @@ class ForkTests(unittest.TestCase):
     def test_lat_zero_is_south(self):
         self.assertAlmostEqual(self.forward(0, 0, 0.0).dec, -90.0, delta=1e-4)
 
-    # ── family equivalence ──────────────────────────────────────────────
-    def test_families_point_at_same_sky(self):
+    # ── flip equivalence ──────────────────────────────────────────────
+    def test_flip_equivalents_point_at_same_sky(self):
         for ra in [-140, -60, 0, 60, 140]:
             for dec in [1, 30, 90, 149]:
                 a = self.forward(ra, dec)
@@ -156,7 +156,7 @@ class ForkTests(unittest.TestCase):
 
     # ── reverse selection ───────────────────────────────────────────────
     def test_goto_current_object_stays_put(self):
-        # From (60,-30) the object (dec=-60, H=-120) is itself: family B wins.
+        # From (60,-30) the object (dec=-60, H=-120) is itself: the flipped equivalent wins.
         eq = self.forward(60, -30)
         ok, out = self.reverse(eq.ra, eq.dec, Axis(60, -30))
         self.assertTrue(ok)
@@ -203,7 +203,7 @@ class ForkTests(unittest.TestCase):
         ok, _ = self.reverse(self.ha_ra(160), -60, Axis(0, 0))
         self.assertFalse(ok)
 
-    def test_admit_negative_family(self):
+    def test_admit_negative_side(self):
         # H=160, dec=-80 -> R=-20, D=-10.
         self.lib.host_limits(-90, 90, -20, 120)
         ok, out = self.reverse(self.ha_ra(160), -80, Axis(0, 0))
@@ -226,7 +226,7 @@ class ForkTests(unittest.TestCase):
         self.assertAlmostEqual(out.ra, 181, delta=1e-3)
 
     def test_small_correction_no_180_jump(self):
-        # Crossing H=0 far from the pole stays a small move (family A).
+        # Crossing H=0 far from the pole stays a small move (unflipped).
         ok, a = self.reverse(self.ha_ra(-0.5), -60, Axis(0, 30))
         self.assertTrue(ok)
         ok, b = self.reverse(self.ha_ra(0.5), -60, a)
@@ -236,7 +236,7 @@ class ForkTests(unittest.TestCase):
 
     def test_meridian_cross_same_instant_uses_min_travel(self):
         # West (H=+60) then east (H=-60) at the same instant: from (60,30) the
-        # min-travel destination is family B (120,-30), not (-60,30).
+        # min-travel destination is the flipped (120,-30), not the unflipped (-60,30).
         self.lib.host_limits(-150, 150, -150, 150)
         ok, west = self.reverse(self.ha_ra(60), -60, Axis(0, 0))
         self.assertTrue(ok)
@@ -270,8 +270,8 @@ class ForkTests(unittest.TestCase):
 
     def test_goto_alternative_when_nearest_out_of_limit(self):
         # Reproduce: current (149.99, 30), target H=149.999 dec=-60, limits ±150.
-        # Family A lands at R≈150.007 after compensation (past the limit); the
-        # minimum-travel selection must fall back to family B (≈-29.867, -30).
+        # The unflipped lands at R≈150.007 after compensation (past the limit); the
+        # minimum-travel selection must fall back to the flipped (≈-29.867, -30).
         self.lib.host_limits(-150, 150, -150, 150)
         self.lib.host_ra(149.99)
         self.lib.host_dec(30)
