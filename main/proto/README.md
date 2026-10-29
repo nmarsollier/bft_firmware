@@ -103,7 +103,7 @@ hex en ambos.
   "name": "BFT", "firmware_version": "0.1.0",
   "capabilities": {
     "axes": ["ra", "dec"],
-    "slew_speeds_dps": [1.0, 3.0, 4.5, 6.0],
+    "slew_speeds_dps": [0.5, 1.0, 2.5, 4.0],
     "tracking_modes": ["none", "sidereal", "lunar", "solar"],
     "caps": { "guide": true, "home": true, "park": true, "unpark": true,
               "move_axis": true, "slew": true, "tracking": true, "sync": false,
@@ -207,7 +207,7 @@ respuesta es **aceptada/rechazada**; el desenlace se lee después en `state`.
 { "type": "action", "id": 16, "action": "limits", "param": "set_home|set_ra_left|set_ra_right|set_dec_left|set_dec_right|clear_limits" }
 ```
 
-- `goto`: RA en `[0,24)`, DEC en `[-90,90]`; velocidad `1..4` (1/3/4.5/6 °/s).
+- `goto`: RA en `[0,24)`, DEC en `[-90,90]`; velocidad `1..4` (0.5/1/2.5/4 °/s).
 - `guide`: el pulso se temporiza entero en el ESP.
 - `stop`: `all` = detiene todo (incluido tracking); `manual` = detiene el manual y
   restaura el tracking pausado.

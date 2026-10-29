@@ -58,10 +58,10 @@ int64_t motors_deg_to_steps(float degrees) {
 }
 float motors_get_slewing_speed(int speed_rate) {
     switch (speed_rate) {
-        case 1: return 1.0f;
-        case 2: return 3.0f;
-        case 3: return 4.5f;
-        default: return 6.0f;
+        case 1: return 0.5f;
+        case 2: return 1.0f;
+        case 3: return 2.5f;
+        default: return 4.0f;
     }
 }
 bool motors_status_is_error(MotorsStatus s) { return s == MOTORS_STATUS_ERROR; }

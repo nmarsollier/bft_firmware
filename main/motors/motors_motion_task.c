@@ -110,8 +110,8 @@ static struct {
 
 /* Accel/decel ramp window in centidegrees — fixed angular distance
  * regardless of total travel (5 degrees). */
-#define ACCEL_DIST_CDS   500
-#define DECEL_DIST_CDS   500
+#define ACCEL_DIST_CDS   1000
+#define DECEL_DIST_CDS   1000
 
 /*
  * Velocity percentage (0-100) at a given travelled distance for the

@@ -14,7 +14,7 @@ def _quiet(proto):
 def test_goto_reaches_destination(proto):
     """GOTO from rest reaches the reported destination (duration + arrival)."""
     setup_site_time(proto)
-    m = assert_goto_duration(proto, 6.0, -60.0, 6.0)
+    m = assert_goto_duration(proto, 6.0, -60.0, 4.0)
     assert m["elapsed"] >= m["expected"] * 0.5
 
 

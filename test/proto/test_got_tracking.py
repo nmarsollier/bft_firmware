@@ -17,14 +17,14 @@ def test_goto_preserves_tracking(proto):
     setup_site_time(proto)
     proto.control(tracking="sidereal")
     wait_tracking(proto, "sidereal")
-    assert_goto_duration(proto, 6.0, -60.0, 6.0)
+    assert_goto_duration(proto, 6.0, -60.0, 4.0)
     assert proto.state()["tracking"] == "sidereal", "goto did not preserve tracking"
 
 
 def test_goto_without_tracking_stays_off(proto):
     """A goto with tracking off leaves tracking off."""
     setup_site_time(proto)
-    assert_goto_duration(proto, 6.0, -60.0, 6.0)
+    assert_goto_duration(proto, 6.0, -60.0, 4.0)
     assert proto.state()["tracking"] == "none"
 
 
@@ -34,6 +34,6 @@ def test_goto_preserves_tracking_rate(proto, rate):
     setup_site_time(proto)
     proto.control(tracking=MODES[rate])
     wait_tracking(proto, MODES[rate])
-    assert_goto_duration(proto, 6.0, -60.0, 6.0)
+    assert_goto_duration(proto, 6.0, -60.0, 4.0)
     assert proto.state()["tracking"] == MODES[rate], \
         f"goto changed rate from {MODES[rate]} to {proto.state()['tracking']}"

@@ -3,7 +3,7 @@ import pytest
 
 from conftest import assert_angular_close, assert_goto_duration, setup_site_time
 
-SPEED_DPS = 6.0
+SPEED_DPS = 4.0
 
 
 @pytest.fixture(autouse=True)

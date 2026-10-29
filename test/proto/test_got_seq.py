@@ -4,7 +4,7 @@ import pytest
 from conftest import (assert_angular_close, assert_goto_duration, axis_position,
                       setup_site_time, wait_not_moving)
 
-SPEED_DPS = 6.0
+SPEED_DPS = 4.0
 TOL = 0.1
 
 

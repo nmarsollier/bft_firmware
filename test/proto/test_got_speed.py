@@ -6,7 +6,7 @@ import pytest
 from conftest import axis_position, goto_time, setup_site_time, wait_not_moving
 from oracle import MIN_SLEW_DPS
 
-SPEEDS = [(1, 1.0), (2, 3.0), (3, 4.5), (4, 6.0)]
+SPEEDS = [(1, 0.5), (2, 1.0), (3, 2.5), (4, 4.0)]
 
 
 @pytest.fixture(autouse=True)

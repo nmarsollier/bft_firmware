@@ -14,7 +14,7 @@ def test_capabilities_slew_speeds(proto):
     """CAPABILITIES reports the four slew speed profiles in deg/s."""
     speeds = proto.capabilities()["slew_speeds_dps"]
     assert len(speeds) == 4
-    assert speeds == [1.0, 3.0, 4.5, 6.0]
+    assert speeds == [0.5, 1.0, 2.5, 4.0]
 
 
 def test_capabilities_tracking_modes(proto):

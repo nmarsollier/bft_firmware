@@ -139,7 +139,7 @@ def assert_goto_duration(proto, ra, dec, speed_dps, slack_s=3.0, factor=1.35):
     """
     start = axis_position(proto)
     t0 = time.monotonic()
-    proto.action("goto", ra=ra, dec=dec, speed=4)   # speed 4 == 6 °/s
+    proto.action("goto", ra=ra, dec=dec, speed=4)   # speed 4 == 4 °/s
     wait_not_moving(proto)
     elapsed = time.monotonic() - t0
     end = axis_position(proto)
