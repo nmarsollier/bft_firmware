@@ -2,15 +2,14 @@
  *
  * Purpose: non-blocking beep patterns for the event buzzer.
  *
- * Patterns are fixed tables of steps (tone on/off + duration).  A
- * one-shot esp_timer walks the steps, driving the LEDC duty to
- * BUZZER_TONE_DUTY (2 kHz tone) or BUZZER_OFF_DUTY (silence), so the
- * runtime loop is never blocked.  A step with duration_ms == 0 marks
- * the end of the pattern.
+ * Patterns are fixed tables of steps (beep on/off + duration).  A
+ * one-shot esp_timer walks the steps, driving the buzzer GPIO HIGH (beep)
+ * or LOW (silent), so the runtime loop is never blocked.  A step with
+ * duration_ms == 0 marks the end of the pattern.
  */
 #include "buzzer_internal.h"
 
-#include "esp_log.h"
+#include "driver/gpio.h"
 #include "esp_timer.h"
 
 /* ── Pattern tables (sentinel = {0, false}) ────────────────── */
@@ -36,20 +35,20 @@ static esp_timer_handle_t s_timer;
 static const BuzzerStep *s_steps;
 static uint32_t          s_index;
 
-static void set_duty(uint32_t duty) {
-    ledc_set_duty(BUZZER_MODE, BUZZER_CHANNEL, duty);
-    ledc_update_duty(BUZZER_MODE, BUZZER_CHANNEL);
+static void set_buzzer(bool beep_on) {
+    gpio_set_level(BUZZER_GPIO,
+                   beep_on ? BUZZER_ACTIVE_LEVEL : BUZZER_IDLE_LEVEL);
 }
 
 static void apply_step(void) {
     const BuzzerStep *step = &s_steps[s_index];
 
     if (step->duration_ms == 0) {
-        set_duty(BUZZER_OFF_DUTY);
+        set_buzzer(false);
         return;  /* pattern finished — timer left idle */
     }
 
-    set_duty(step->tone_on ? BUZZER_TONE_DUTY : BUZZER_OFF_DUTY);
+    set_buzzer(step->beep_on);
     esp_timer_start_once(s_timer, step->duration_ms * 1000ULL);
 }
 

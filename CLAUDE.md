@@ -59,7 +59,7 @@ consumo o consultar cómo se implementa el lado Alpaca/UI, mirar ahí.
 
 - **CPU**: Tensilica Xtensa 32-bit LX7, doble nucleo, hasta 240 MHz
 - **Alimentacion**: 5.5V via LM2596
-- **Logica I/O**: 3.3V (no tolera 5V, LED y buzzer directos a GPIO 1 y 2)
+- **Logica I/O**: 3.3V (no tolera 5V, LED directo a GPIO 1; buzzer activo via UMC2003 en GPIO 9)
 - **GPIO digitales**: 45 (configurables)
 - **ADC**: 2 conversores SAR ADC de 12 bits, hasta 20 canales
 - **UART**: 3 controladores UART
@@ -78,13 +78,14 @@ consumo o consultar cómo se implementa el lado Alpaca/UI, mirar ahí.
 | 12   | STEP- DEC         | Pulso STEP eje declinacion (via UMC2003)              |
 | 11   | DIR- DEC          | Direccion eje declinacion (via UMC2003)               |
 | 1    | LED externo       | LEDC PWM, indicador de estado (directo a GPIO)                      |
-| 2    | BUZZER            | Buzzer pasivo 2 kHz (directo a GPIO)                  |
+| 9    | BUZZER            | Buzzer activo via UMC2003 (+5V). GPIO HIGH = beep |
 
 **Level shifting (UMC2003, array Darlington):**
 Los drivers TB6600 usan optoacopladores en STEP/DIR. Las salidas
 STEP y DIR de ambos ejes pasan por un UMC2003, un array
 Darlington de 7 canales con salidas de colector abierto (sinking).
-El LED y el buzzer van directos al GPIO (sin level shifting).
+El LED va directo al GPIO (sin level shifting); el buzzer activo se conmuta a
+traves de un canal del UMC2003.
 
 Cada GPIO va directo a una entrada del UMC2003 (resistencia de base interna,
 no requiere resistor externo). La salida hunde corriente hacia GND:
@@ -141,7 +142,7 @@ App de escritorio Go (Alpaca/UI) → USB CDC-ACM → Proto → Mount (orquestaci
 - **Runtime** (`main/runtime/`) — Inicializacion y ciclo de vida del sistema.
 - **Motors** (`main/motors/`) — Control de motores de alto nivel y ejecucion hardware: GPIO DIR, RMT para STEP.
 - **LED** (`main/led/`) — Control PWM del LED externo en GPIO 1. Estados: tenue (normal), brillante (slewing), respiracion (error).
-- **Buzzer** (`main/buzzer/`) — Buzzer pasivo de eventos en GPIO 2 (2 kHz via LEDC). Beeps de arranque, inicio y fin de goto/move axis.
+- **Buzzer** (`main/buzzer/`) — Buzzer activo de eventos en GPIO 9 (via UMC2003). Beeps de arranque, inicio y fin de goto/move axis.
 - **Power** (`main/power/`) — Sensor de energia externa (ADC en GPIO 8). Bloquea el movimiento cuando la montura esta solo con USB (12V apagado).
 - **Utils** (`main/utils/`) — Utilidades transversales (parser, validacion).
 

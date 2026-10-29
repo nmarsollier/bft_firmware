@@ -39,8 +39,8 @@
 /* Status LED — direct GPIO, LEDC PWM. */
 #define LED_GPIO        GPIO_NUM_1
 
-/* Passive buzzer — direct GPIO, LEDC PWM (2 kHz). */
-#define BUZZER_GPIO     GPIO_NUM_2
+/* Active buzzer — switched through UMC2003 (sinking), GPIO HIGH = beep. */
+#define BUZZER_GPIO     GPIO_NUM_9
 
 /* External 5v5 rail detection — GPIO 8 (ADC1_CH7), 10k/10k divider on the
  * LM2596 5.5V output. */

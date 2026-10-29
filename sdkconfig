@@ -3580,7 +3580,7 @@ CONFIG_WL_SECTOR_SIZE=4096
 #
 # BFT Mount
 #
-CONFIG_BFT_TEST_BUILD=y
+# CONFIG_BFT_TEST_BUILD is not set
 # end of BFT Mount
 
 #

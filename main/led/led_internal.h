@@ -15,8 +15,8 @@
 
 /* ── Brightness levels (13-bit range: 0 – 8191) ──────────── */
 
-#define LED_DIM_DUTY     1000  /* ~24 % */
-#define LED_BRIGHT_DUTY  8191  /* 100 % */
+#define LED_DIM_DUTY     300  /* ~24 % */
+#define LED_BRIGHT_DUTY  2000  /* 8191 = 100 % */
 
 /* ── Timing ───────────────────────────────────────────────── */
 
