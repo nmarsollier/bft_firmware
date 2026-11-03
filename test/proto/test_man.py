@@ -4,7 +4,7 @@ import time
 import pytest
 
 from client import DeviceError
-from conftest import axis_position, setup_site_time, wait_not_moving, wait_slewing
+from conftest import axis_position, setup_site_time, wait_not_moving, wait_slewing, wait_until
 
 
 @pytest.fixture(autouse=True)
@@ -118,6 +118,13 @@ def test_move_axis_limit(proto, axis, limit):
     else:
         proto.control(manual_dec_dps=-1.0)
     wait_slewing(proto)
+    # Wait until the axis actually moves away from the limit (a completed RMT
+    # batch updates the position).  Stopping right after wait_slewing() races
+    # the first batch: the "slewing" flag is set before any step is emitted,
+    # so an immediate stop can abort the move before the counter moves.
+    key = "ra_deg" if axis == 0 else "dec_deg"
+    wait_until(lambda: axis_position(proto)[key], lambda v: v < limit, 10,
+               f"axis {axis} moved away from the limit")
     if axis == 0:
         proto.control(manual_ra_dps=0.0)
     else:

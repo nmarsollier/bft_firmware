@@ -8,9 +8,12 @@ SERIAL ?=                               # CDC-ACM port — auto-detected when em
 
 .PHONY: flash test-cdc
 
-# Flash the firmware.
+# Flash the firmware as a test build: separate build dir (build.test) + sdkconfig.test
+# (CONFIG_BFT_TEST_BUILD=y, external-power gating disabled) so the suite runs over USB
+# without the 12V rail.  The production build/ and sdkconfig are left untouched, so a
+# later `idf.py build` still flashes with the safety gate enabled.
 flash:
-	cd .. && source ~/.espressif/v6.0.1/esp-idf/export.sh && idf.py -p $(PORT) flash
+	cd .. && source ~/.espressif/v6.0.1/esp-idf/export.sh && idf.py -B build.test -DSDKCONFIG=sdkconfig.test -p $(PORT) flash
 
 # Serial protocol suite.
 test-cdc:
