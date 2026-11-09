@@ -155,6 +155,13 @@ MountResult mount_unpark(void);
  */
 MountResult mount_settings_update(MountSettings settings);
 
+/*
+ * Validate a site settings struct without applying it.  Used by the config
+ * layer to reject an out-of-range latitude/longitude before any other field of
+ * the same request is applied.
+ */
+MountResult mount_settings_validate(MountSettings settings);
+
 MountResult mount_set_system_time(const char *iso_time);
 
 /* True once a valid system time has been set — gates GOTO. */
@@ -226,9 +233,17 @@ MountResult mount_pulse_guide(GuideDirection direction, uint32_t duration_ms);
  * -------------------------------------------
  * Store or retrieve the guide rate per axis in degrees/second.
  * Kept separate to expose independent RA and DEC guide-rate properties.
+ *
+ * Rates are clamped to [0, MOUNT_GUIDE_RATE_MAX_DPS].  Zero disables guiding
+ * on that axis: a PulseGuide directed at it is rejected before being queued.
+ * The setters return false (and keep the previous value) when the rate is
+ * out of range, non-finite or negative; a finite rate in range returns true.
  */
-void mount_set_guide_rate_ra(float rate_dps);
-void mount_set_guide_rate_dec(float rate_dps);
+#define MOUNT_GUIDE_RATE_MAX_DPS 1.0f
+
+bool mount_set_guide_rate_ra(float rate_dps);
+bool mount_set_guide_rate_dec(float rate_dps);
+bool mount_guide_rate_is_valid(float rate_dps);
 float mount_get_guide_rate_ra(void);
 float mount_get_guide_rate_dec(void);
 

@@ -30,32 +30,101 @@ void proto_handle_config(const char *req, uint32_t id, char *out, size_t cap) {
     char err[128] = {0};
     bool changed = false;
 
-    /* Site location — partial: start from the current value, override present. */
+    /* ── Parse and validate every field before applying any change ──
+     *
+     * `proto_json_has_key` distinguishes "absent" from "present"; a field that
+     * is present but has the wrong type or a non-finite value must reject the
+     * whole request, not be silently treated as absent. */
     MountSettings settings = mount_get_visible_status().settings;
     float f;
     int iv;
     bool site_changed = false;
 
-    if (proto_json_get_float(req, "lat", &f)) { settings.lat = f; site_changed = true; }
-    if (proto_json_get_float(req, "lon", &f)) { settings.lon = f; site_changed = true; }
-    if (proto_json_get_int(req, "elevation", &iv)) { settings.elevation = iv; site_changed = true; }
+    bool lat_present = proto_json_has_key(req, "lat");
+    bool lon_present = proto_json_has_key(req, "lon");
+    bool elev_present = proto_json_has_key(req, "elevation");
 
-    if (site_changed) {
+    if (err[0] == '\0' && lat_present) {
+        if (!proto_json_get_float(req, "lat", &f)) {
+            snprintf(err, sizeof(err), "invalid lat");
+        } else {
+            settings.lat = f;
+            site_changed = true;
+        }
+    }
+    if (err[0] == '\0' && lon_present) {
+        if (!proto_json_get_float(req, "lon", &f)) {
+            snprintf(err, sizeof(err), "invalid lon");
+        } else {
+            settings.lon = f;
+            site_changed = true;
+        }
+    }
+    if (err[0] == '\0' && elev_present) {
+        if (!proto_json_get_int(req, "elevation", &iv)) {
+            snprintf(err, sizeof(err), "invalid elevation");
+        } else {
+            settings.elevation = iv;
+            site_changed = true;
+        }
+    }
+
+    /* Site range validation — must run BEFORE any apply, otherwise an
+     * out-of-range latitude/longitude would still apply the UTC clock and bump
+     * the revision (a partial effect). */
+    if (err[0] == '\0' && site_changed) {
+        MountResult vr = mount_settings_validate(settings);
+        record_error(&vr, err, sizeof(err));
+    }
+
+    float ra_rate = 0.0f;
+    float dec_rate = 0.0f;
+    bool ra_present = proto_json_has_key(req, "guide_rate_ra");
+    bool dec_present = proto_json_has_key(req, "guide_rate_dec");
+
+    if (err[0] == '\0' && ra_present) {
+        if (!proto_json_get_float(req, "guide_rate_ra", &ra_rate) ||
+            !mount_guide_rate_is_valid(ra_rate)) {
+            snprintf(err, sizeof(err), "guide rate out of range [0,1]");
+        }
+    }
+    if (err[0] == '\0' && dec_present) {
+        if (!proto_json_get_float(req, "guide_rate_dec", &dec_rate) ||
+            !mount_guide_rate_is_valid(dec_rate)) {
+            snprintf(err, sizeof(err), "guide rate out of range [0,1]");
+        }
+    }
+
+    char utc[64];
+    bool utc_present = proto_json_has_key(req, "utc");
+    if (err[0] == '\0' && utc_present) {
+        if (!proto_json_get_string(req, "utc", utc, sizeof(utc))) {
+            snprintf(err, sizeof(err), "invalid utc");
+        }
+    }
+
+    /* ── Apply only if every field validated cleanly ──
+     *
+     * UTC is applied first: its validation can only fail inside
+     * mount_set_system_time, and applying it first guarantees a bad UTC leaves
+     * no partial effect on site or guide rates. */
+    if (err[0] == '\0' && utc_present) {
+        MountResult r = mount_set_system_time(utc);
+        record_error(&r, err, sizeof(err));
+        if (r.ok) changed = true;
+    }
+    if (err[0] == '\0' && site_changed) {
         MountResult r = mount_settings_update(settings);
         record_error(&r, err, sizeof(err));
         if (r.ok) changed = true;
     }
-
-    /* Guide rates (in-memory). */
-    if (proto_json_get_float(req, "guide_rate_ra", &f)) { mount_set_guide_rate_ra(f); changed = true; }
-    if (proto_json_get_float(req, "guide_rate_dec", &f)) { mount_set_guide_rate_dec(f); changed = true; }
-
-    /* UTC time — applied, not persisted. */
-    char utc[64];
-    if (proto_json_get_string(req, "utc", utc, sizeof(utc))) {
-        MountResult r = mount_set_system_time(utc);
-        record_error(&r, err, sizeof(err));
-        if (r.ok) changed = true;
+    if (err[0] == '\0' && ra_present) {
+        mount_set_guide_rate_ra(ra_rate);
+        changed = true;
+    }
+    if (err[0] == '\0' && dec_present) {
+        mount_set_guide_rate_dec(dec_rate);
+        changed = true;
     }
 
     if (changed) {

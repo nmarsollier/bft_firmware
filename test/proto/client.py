@@ -48,6 +48,26 @@ def detect_serial_port():
     return None
 
 
+def detect_flash_port():
+    """Return the BFT USB-Serial/JTAG port used for flashing, or None.
+
+    The board exposes two USB endpoints: the native USB-Serial/JTAG (flashing +
+    monitor) and the CDC-ACM (the mount protocol).  The JTAG endpoint enumerates
+    as /dev/cu.usbserial-* on macOS (ttyUSB* on Linux) with the Espressif VID
+    0x303A, while the protocol endpoint is /dev/cu.usbmodem* (matched above).
+    """
+    ports = list(serial.tools.list_ports.comports())
+    for p in ports:
+        dev = p.device or ""
+        if getattr(p, "vid", None) == 0x303A and "usbserial" in dev:
+            return dev
+    for p in ports:
+        dev = p.device or ""
+        if "usbserial" in dev or "ttyUSB" in dev:
+            return dev
+    return None
+
+
 class ProtoClient:
     """Cliente del protocolo de montura sobre el puerto serial CDC-ACM."""
 

@@ -42,8 +42,8 @@ the UI for N.I.N.A. and PHD2.
 ## Tests
 
 ```sh
-make test-cdc     # serial protocol suite (requires the board connected over USB)
-make flash        # shortcut: build + flash
+make -C test flash
+make -C test test-cdc 
 ```
 
 ## Architecture

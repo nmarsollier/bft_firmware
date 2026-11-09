@@ -49,6 +49,7 @@ static MotorResultCode motors_slew_axis_impl(float ra_delta_deg, float dec_delta
         MotorResultCode trk_rc = motors_start_tracking(currTracking);
         if (trk_rc != MOTOR_OK) {
             ESP_LOGE(TAG, "Failed to resume tracking after slew (rc=%d)", trk_rc);
+            return trk_rc;
         }
     }
     return MOTOR_OK;

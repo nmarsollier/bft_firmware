@@ -4,7 +4,7 @@ import time
 import pytest
 
 from client import DeviceError
-from conftest import axis_position, setup_site_time, wait_not_moving, wait_slewing, wait_until
+from conftest import axis_position, setup_site_time, wait_not_moving, wait_slewing, wait_tracking, wait_until
 
 
 @pytest.fixture(autouse=True)
@@ -20,6 +20,24 @@ def test_move_axis_constant_speed(proto):
     proto.control(manual_ra_dps=0.0)
     wait_not_moving(proto)
     assert proto.state()["state"] != "slewing"
+
+
+def test_move_axis_preserves_tracking(proto):
+    """A manual move while tracking is active restores tracking on release,
+    and a duplicate release (pointerup + pointerleave) stays idempotent."""
+    proto.control(tracking="sidereal")
+    wait_tracking(proto, "sidereal")
+
+    proto.control(manual_dec_dps=0.5)
+    wait_slewing(proto)
+
+    # The joystick fires joyStop on both pointerup and pointerleave, so the
+    # release arrives twice.  The second must not clear the restored tracking.
+    proto.control(manual_dec_dps=0.0)
+    proto.control(manual_dec_dps=0.0)
+
+    wait_tracking(proto, "sidereal")
+    assert proto.state()["tracking"] == "sidereal"
 
 
 def test_rejected_rate_not_remembered(proto):

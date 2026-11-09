@@ -22,6 +22,8 @@ test/proto/          serial protocol acceptance suite
   test_man.py           manual movement (MoveAxis) + axis limits
   test_gui.py           autoguiding (PulseGuide)
   test_guide_effect.py  PulseGuide position/time effect
+  test_trk_preserve.py  tracking never lost across axis movements + guide pulses
+  test_phd_calibration.py  end-to-end PHD2 calibration replay (counters move)
   test_mer.py           meridian crossing without flip
   test_prk.py           park / unpark
   test_ref.py           reference / home
@@ -94,3 +96,31 @@ tolerance for the reported position (not physical pointing).
 and exercises the production coordinate and guiding C code with hardware
 stubs. It covers meridian continuity, orientation, limits, poles and guiding.
 The CDC suite still requires a board and is the integration acceptance step.
+
+The PHD2 calibration host test is `test/host/test_phd_calibration.py`. It
+compiles the **real** production guide path (`mount_pulse_guide.c`,
+`motors_pulse_guide.c`, `motors_command_queue.c`, `motors_rmt.c`, `motors_hw.c`,
+`motors_current_state.c`) against a simulated clock/RTOS/RMT and **observes the
+STEP transmissions** per axis. A "suppress DEC RMT" mutation makes the nominal
+DEC pulse emit zero steps, so a motionless DEC is caught even though every
+layer above returns `ok=true`.
+
+## PHD2 calibration regression — result separation
+
+The motivating bug was a real calibration where DEC did not move while all
+commands answered `ok=true`. Coverage is split so each layer is honest about
+what it can prove:
+
+| Layer | Test | What it proves |
+|---|---|---|
+| Host (RMT observation) | `test/host/test_phd_calibration.py` | The motion task actually emits DEC STEP pulses with the right sign/shape; suppressed DEC RMT must fail. |
+| CDC (counters) | `test/proto/test_phd_calibration.py` | The firmware's reported `ra_steps`/`dec_steps` move by the guide rate over the serial protocol. |
+| Gateway/PHD2 | not automated here | A CDC replay is not PHD2; it needs the real `mount_panel` Alpaca translation (see its own suite). |
+| Physical motion | out of scope | Neither counters nor RMT confirm the motor/axis turned; that needs a camera/encoder. |
+
+The nominal CDC sequence is a **single test** (`test_phd2_calibration_nominal`)
+so the autouse STOP/HOME fixtures cannot interleave and destroy the
+tracking/motion state being asserted. It drives W→E→DEC-cleanup→N→S with
+sidereal tracking and checks the DEC arc magnitude with an independent oracle
+(`GUIDE_DPS = 0.5 × sidereal`, `DEG_PER_STEP = 1.8/(32·500)`), not with a
+0.1° tolerance that would pass a motionless axis.

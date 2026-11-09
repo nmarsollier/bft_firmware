@@ -20,6 +20,16 @@ MountResult mount_set_move_axis_speed(float ra_speed, float dec_speed) {
     if (ra_speed == 0.0f && dec_speed == 0.0f) {
         /* Read before mount_stop() — mount_move_axis_reset() clears it. */
         TrackingMode to_restore = s_saved_tracking;
+
+        /* A stop with no manual move in flight and no saved tracking is a
+         * duplicate release (the joystick fires both pointerup and
+         * pointerleave).  Calling mount_stop() here would clear the queue and
+         * drop the TRACK command the previous release just enqueued, losing
+         * the tracking mode. */
+        if (to_restore == TRACKING_NONE && s_ra_rate == 0.0f && s_dec_rate == 0.0f) {
+            return mount_result_ok();
+        }
+
         MountResult r = mount_stop();
         if (r.ok && to_restore != TRACKING_NONE) {
             /* A failed stop must not be reported as a clean manual stop, nor

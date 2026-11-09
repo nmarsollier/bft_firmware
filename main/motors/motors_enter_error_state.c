@@ -19,6 +19,7 @@ static bool s_hardware_fault = false;
 void motors_enter_error_state(void) {
     portENTER_CRITICAL(&motors_state_lock);
     motors_state.status = MOTORS_STATUS_ERROR;
+    motors_state.tracking = TRACKING_NONE;
     motors_state.guiding = false;
     portEXIT_CRITICAL(&motors_state_lock);
 }

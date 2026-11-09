@@ -46,6 +46,18 @@ MountResult mount_pulse_guide(GuideDirection direction, uint32_t duration_ms) {
     float dec_rate = mount_get_guide_rate_dec();
     float p = (mount_internal_state.lat > 0.0f) ? 1.0f : -1.0f;
 
+    /* A zero rate disables guiding on that axis: reject before enqueuing so a
+     * PulseGuide cannot be accepted with a zero offset.  The other axis keeps
+     * working independently. */
+    if ((direction == GUIDE_DIRECTION_EAST || direction == GUIDE_DIRECTION_WEST)
+        && ra_rate <= 0.0f) {
+        return mount_result_error("RA guide disabled (guide_rate_ra is zero)");
+    }
+    if ((direction == GUIDE_DIRECTION_NORTH || direction == GUIDE_DIRECTION_SOUTH)
+        && dec_rate <= 0.0f) {
+        return mount_result_error("DEC guide disabled (guide_rate_dec is zero)");
+    }
+
     MotorResultCode rc;
     switch (direction) {
     case GUIDE_DIRECTION_EAST:
@@ -82,6 +94,14 @@ MountResult mount_pulse_guide(GuideDirection direction, uint32_t duration_ms) {
             return mount_result_error("Guide would cross the pole");
         }
 
+        /* Reject a guide whose DEC arc would exceed the mechanical limit — a
+         * truncated (or zero) move must be a clear rejection, not a silent
+         * partial completion. */
+        if (d_end > state.limits.dec_max || d_end < state.limits.dec_min) {
+            ESP_LOGW(TAG, "Rejected: DEC guide would exceed the limit");
+            return mount_result_error("Guide would exceed the DEC limit");
+        }
+
         rc = motors_pulse_guide_start(1, offset, duration_ms);
         break;
     }
@@ -97,7 +117,27 @@ MountResult mount_pulse_guide(GuideDirection direction, uint32_t duration_ms) {
 static float s_guide_rate_ra  = TRACKING_SPEED_SIDEREAL_DPS * 0.5f;
 static float s_guide_rate_dec = TRACKING_SPEED_SIDEREAL_DPS * 0.5f;
 
-void mount_set_guide_rate_ra(float rate_dps)  { s_guide_rate_ra = rate_dps; }
-void mount_set_guide_rate_dec(float rate_dps) { s_guide_rate_dec = rate_dps; }
-float mount_get_guide_rate_ra(void)           { return s_guide_rate_ra; }
-float mount_get_guide_rate_dec(void)          { return s_guide_rate_dec; }
+bool mount_guide_rate_is_valid(float rate_dps) {
+    return isfinite(rate_dps)
+        && rate_dps >= 0.0f
+        && rate_dps <= MOUNT_GUIDE_RATE_MAX_DPS;
+}
+
+bool mount_set_guide_rate_ra(float rate_dps) {
+    if (!mount_guide_rate_is_valid(rate_dps)) {
+        return false;
+    }
+    s_guide_rate_ra = rate_dps;
+    return true;
+}
+
+bool mount_set_guide_rate_dec(float rate_dps) {
+    if (!mount_guide_rate_is_valid(rate_dps)) {
+        return false;
+    }
+    s_guide_rate_dec = rate_dps;
+    return true;
+}
+
+float mount_get_guide_rate_ra(void) { return s_guide_rate_ra; }
+float mount_get_guide_rate_dec(void) { return s_guide_rate_dec; }

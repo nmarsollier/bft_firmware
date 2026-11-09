@@ -293,11 +293,18 @@ static void finish_motion(void) {
     portEXIT_CRITICAL(&motors_state_lock);
 }
 
-/* Emergency abort: clean shutdown.  The channel teardown happens later in
- * motion_loop() via motors_rmt_reset_both(). */
+/* Emergency abort: an RMT transmit/wait failed.  This is a hardware fault —
+ * publish it so the client can tell it apart from a normal completion, and
+ * clear BOTH guide deadlines/offsets so a stale deadline cannot re-assert
+ * `guiding` after the task returns. */
 static void abort_motion(void) {
     s_motion.aborted = true;
-    finish_motion();
+    s_motion.active = false;
+    s_motion.ra_guide_deadline_us = 0;
+    s_motion.ra_guide_offset_dps = 0.0f;
+    s_motion.dec_guide_deadline_us = 0;
+    s_motion.dec_guide_offset_dps = 0.0f;
+    motors_enter_hardware_fault();
 }
 
 /* Recompute RA / DEC step-period ticks from current ramp or constant speed. */
@@ -377,12 +384,7 @@ static bool emit_ra_tracking_step(int direction, rmt_symbol_word_t *buffer) {
     esp_err_t tx_err = motors_rmt_transmit_ra(buffer, 1);
     if (tx_err != ESP_OK) {
         ESP_LOGE(TAG, "RMT RA tx fail: %s", esp_err_to_name(tx_err));
-        s_motion.active = false;
-        portENTER_CRITICAL(&motors_state_lock);
-        motors_state.status = MOTORS_STATUS_READY;
-        motors_state.tracking = TRACKING_NONE;
-        motors_state.guiding = false;
-        portEXIT_CRITICAL(&motors_state_lock);
+        abort_motion();
         return false;
     }
 
@@ -390,12 +392,7 @@ static bool emit_ra_tracking_step(int direction, rmt_symbol_word_t *buffer) {
     if (wait_err != ESP_OK) {
         ESP_LOGW(TAG, "RMT RA wait %s",
                  (wait_err == ESP_ERR_TIMEOUT) ? "timeout" : "error");
-        s_motion.active = false;
-        portENTER_CRITICAL(&motors_state_lock);
-        motors_state.status = MOTORS_STATUS_READY;
-        motors_state.tracking = TRACKING_NONE;
-        motors_state.guiding = false;
-        portEXIT_CRITICAL(&motors_state_lock);
+        abort_motion();
         return false;
     }
 
@@ -1115,9 +1112,7 @@ static void tracking_loop_rmt(void) {
             esp_err_t tx_err = motors_rmt_transmit_dec(dec_sym, 1);
             if (tx_err != ESP_OK) {
                 ESP_LOGE(TAG, "RMT DEC tx fail: %s", esp_err_to_name(tx_err));
-                s_motion.dec_guide_deadline_us = 0;
-                s_motion.dec_guide_offset_dps = 0.0f;
-                dec_dir_set = 0;
+                abort_motion();
                 dec_phase = 0.0;
                 break;
             }
@@ -1125,9 +1120,7 @@ static void tracking_loop_rmt(void) {
             if (wait_err != ESP_OK) {
                 ESP_LOGW(TAG, "RMT DEC wait %s",
                          (wait_err == ESP_ERR_TIMEOUT) ? "timeout" : "error");
-                s_motion.dec_guide_deadline_us = 0;
-                s_motion.dec_guide_offset_dps = 0.0f;
-                dec_dir_set = 0;
+                abort_motion();
                 dec_phase = 0.0;
                 break;
             }
@@ -1157,9 +1150,7 @@ static void tracking_loop_rmt(void) {
             esp_err_t tx_err = motors_rmt_transmit_dec(dec_sym, 1);
             if (tx_err != ESP_OK) {
                 ESP_LOGE(TAG, "RMT DEC tx fail: %s", esp_err_to_name(tx_err));
-                s_motion.dec_guide_deadline_us = 0;
-                s_motion.dec_guide_offset_dps = 0.0f;
-                dec_dir_set = 0;
+                abort_motion();
                 dec_phase = 0.0;
                 break;
             }
@@ -1167,9 +1158,7 @@ static void tracking_loop_rmt(void) {
             if (wait_err != ESP_OK) {
                 ESP_LOGW(TAG, "RMT DEC wait %s",
                          (wait_err == ESP_ERR_TIMEOUT) ? "timeout" : "error");
-                s_motion.dec_guide_deadline_us = 0;
-                s_motion.dec_guide_offset_dps = 0.0f;
-                dec_dir_set = 0;
+                abort_motion();
                 dec_phase = 0.0;
                 break;
             }
@@ -1300,39 +1289,51 @@ static void motors_motion_task_run(void *arg) {
         if (s_motion_idle_sem != NULL) {
             xSemaphoreGive(s_motion_idle_sem);
         }
-
-        MotionCommand cmd;
-        if (xQueueReceive(motion_cmd_queue, &cmd, portMAX_DELAY) != pdTRUE)
-            continue;
-
-        /* Consume the idle signal — the motion task is now running. */
-        if (s_motion_idle_sem != NULL) {
-            xSemaphoreTake(s_motion_idle_sem, 0);
-        }
-
-        process_command(cmd);
-
-        if (cmd.type == MOTION_CMD_SLEW || cmd.type == MOTION_CMD_TRACK ||
-            cmd.type == MOTION_CMD_MOVE_AXIS) {
-            motion_loop();
-        }
-        /* PULSE_GUIDE: the tracking loop picks up guide state on each
-         * iteration.  If tracking is NOT active, the guide pulse runs
-         * via a minimal single-step loop below. */
-        if (cmd.type == MOTION_CMD_PULSE_GUIDE
-            && motors_state.status != MOTORS_STATUS_TRACKING) {
-            /* Standalone guiding — run a short motion loop just for
-             * the guide pulse.  DEC-only: no tracking base rate. */
-            motion_loop();
-        }
-
-        /* Clear guiding flag when both axes are idle. */
-        bool ra_active = (s_motion.ra_guide_deadline_us != 0)
-                      && (esp_timer_get_time() < s_motion.ra_guide_deadline_us);
-        bool dec_active = (s_motion.dec_guide_deadline_us != 0)
-                       && (esp_timer_get_time() < s_motion.dec_guide_deadline_us);
-        motors_state.guiding = (ra_active || dec_active);
+        motors_motion_process_one();
     }
+}
+
+/* --------------------------------------------------------------------------
+ * Command processing — dequeue and execute one motion command.
+ *
+ * Extracted from the task loop so the host regression can drive the real
+ * scheduler one command at a time with a simulated clock/RTOS/peripherals,
+ * rather than re-implementing the step generator.  Runs the matching motion
+ * loop, then recomputes `guiding` from any surviving guide deadlines.
+ * -------------------------------------------------------------------------- */
+void motors_motion_process_one(void) {
+    MotionCommand cmd;
+    if (xQueueReceive(motion_cmd_queue, &cmd, portMAX_DELAY) != pdTRUE) {
+        return;
+    }
+
+    /* Consume the idle signal — the motion task is now running. */
+    if (s_motion_idle_sem != NULL) {
+        xSemaphoreTake(s_motion_idle_sem, 0);
+    }
+
+    process_command(cmd);
+
+    if (cmd.type == MOTION_CMD_SLEW || cmd.type == MOTION_CMD_TRACK ||
+        cmd.type == MOTION_CMD_MOVE_AXIS) {
+        motion_loop();
+    }
+    /* PULSE_GUIDE: the tracking loop picks up guide state on each
+     * iteration.  If tracking is NOT active, the guide pulse runs
+     * via a minimal single-step loop below. */
+    if (cmd.type == MOTION_CMD_PULSE_GUIDE
+        && motors_state.status != MOTORS_STATUS_TRACKING) {
+        /* Standalone guiding — run a short motion loop just for
+         * the guide pulse.  DEC-only: no tracking base rate. */
+        motion_loop();
+    }
+
+    /* Clear guiding flag when both axes are idle. */
+    bool ra_active = (s_motion.ra_guide_deadline_us != 0)
+                  && (esp_timer_get_time() < s_motion.ra_guide_deadline_us);
+    bool dec_active = (s_motion.dec_guide_deadline_us != 0)
+                   && (esp_timer_get_time() < s_motion.dec_guide_deadline_us);
+    motors_state.guiding = (ra_active || dec_active);
 }
 
 /* --------------------------------------------------------------------------

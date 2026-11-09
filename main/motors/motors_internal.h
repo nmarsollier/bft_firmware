@@ -215,6 +215,11 @@ extern TaskHandle_t motors_motion_task_handle;
  * Safe to call from any task. */
 void motors_motion_stop(void);
 
+/* Dequeue and execute one motion command (extracted from the task loop).
+ * Exposed so the host regression can drive the real scheduler one command at a
+ * time with simulated clock/RTOS/peripherals. */
+void motors_motion_process_one(void);
+
 /* Wait (bounded) until the motion task is idle.  Call after motors_stop(). */
 void motors_motion_wait_idle(void);
 
