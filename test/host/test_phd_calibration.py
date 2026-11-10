@@ -67,6 +67,9 @@ class PhdCalibrationTests(unittest.TestCase):
             "main/motors/motors_hw.c",
             "main/motors/motors_current_state.c",
             "main/motors/motors_enter_error_state.c",
+            "main/motors/motors_get_tracking_speed.c",
+            "main/motors/motors_stop.c",
+            "main/motors/motors_horizon.c",
             "test/host/phd_sim.c",
         ]
         subprocess.run([

@@ -2,8 +2,8 @@
  *
  * Purpose: stop all motor movement immediately.
  *
- * Clears the command queue, resets state, and delegates hardware stop
- * and task notification to motors_motion_stop().
+ * Clears the command queue, resets state, and delegates the graceful stop
+ * and task notification to motors_motion_stop_graceful().
  */
 #include "motors.h"
 #include "motors_internal.h"
@@ -23,6 +23,6 @@ MotorResultCode motors_stop(void) {
     motors_state.tracking = TRACKING_NONE;
     motors_state.guiding = false;
     portEXIT_CRITICAL(&motors_state_lock);
-    motors_motion_stop();
+    motors_motion_stop_graceful();
     return MOTOR_OK;
 }

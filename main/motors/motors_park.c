@@ -13,7 +13,7 @@ MotorResultCode motors_park(void) {
     }
 
     motors_queue_clear();
-    motors_motion_stop();
+    motors_motion_stop_graceful();
     portENTER_CRITICAL(&motors_state_lock);
     motors_state.status = MOTORS_STATUS_PARKED;
     motors_state.tracking = TRACKING_NONE;

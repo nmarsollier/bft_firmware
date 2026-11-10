@@ -1,5 +1,6 @@
 #include "mount/mount_internal.h"
 #include <sys/time.h>
+#include <math.h>
 
 MountSettings mount_internal_state;
 bool mount_time_valid = true;
@@ -63,6 +64,21 @@ float motors_get_slewing_speed(int speed_rate) {
         case 3: return 2.5f;
         default: return 4.0f;
     }
+}
+/* Ramp-aware slew duration — mirrors motors_slew_duration_estimate(). */
+float motors_slew_duration_estimate(float distance_deg, float speed_dps) {
+    if (distance_deg <= 0.0f || speed_dps <= 0.0f) return 0.0f;
+    const float min_dps = 0.8f;
+    if (distance_deg < 2.0f) return distance_deg / min_dps;
+    float capped = speed_dps;
+    if (distance_deg < 8.0f) {
+        float lim = min_dps * 4.0f;
+        if (capped > lim) capped = lim;
+    }
+    float ramp_ln = logf(capped / min_dps) / (capped - min_dps);
+    if (distance_deg <= 20.0f) return distance_deg * ramp_ln;
+    float t_ramp = 10.0f * ramp_ln;
+    return 2.0f * t_ramp + (distance_deg - 20.0f) / capped;
 }
 bool motors_status_is_error(MotorsStatus s) { return s == MOTORS_STATUS_ERROR; }
 const char *motors_status_to_string(MotorsStatus s) { (void)s; return "ready"; }

@@ -70,6 +70,12 @@ typedef struct {
     /* True when a PulseGuide is active on either axis. */
     bool guiding;
 
+    /* True when the step counters may not match the physical axes — an
+     * emergency abort (power loss / hardware fault) cut an RMT batch
+     * mid-emission, so some emitted microsteps were never counted.  Cleared
+     * when the origin is re-established (set-current-as-home). */
+    bool position_uncertain;
+
     /* Operational limits enforced by the motors module. */
     struct {
         float ra_min;
@@ -133,6 +139,37 @@ float motors_steps_to_deg(int64_t steps);
  * using the active microstep resolution.  Public so the mount layer can
  * validate a destination with the exact conversion the motion task executes. */
 int64_t motors_deg_to_steps(float degrees);
+
+/*
+ * sin(geometric altitude) of a mechanical position at a site latitude (MOUNT.md
+ * §9).  Pure — used by both the mount layer and the motion task.
+ */
+double motors_altitude_sin(float ra_axis_deg, float dec_axis_deg, float lat);
+
+/*
+ * True when every point in the axis-aligned rectangle from (ra_from, dec_from)
+ * to (ra_to, dec_to) is at or above the geometric horizon.  Conservative: a
+ * slew moves each axis monotonically, so the rectangle contains the whole
+ * trajectory (MOUNT.md §10).
+ */
+bool motors_path_above_horizon(float ra_from, float dec_from,
+                               float ra_to, float dec_to, float lat);
+
+/*
+ * True when no motion is active or queued (status not SLEWING/TRACKING, no
+ * active guide pulse, no pending command).  The mount layer uses this to reject
+ * a site-latitude change while movement is active or pending (MOUNT.md §10).
+ */
+bool motors_is_quiescent(void);
+
+/*
+ * Estimated single-axis slew duration (seconds) for a distance and requested
+ * speed, using the real accel/decel ramp profile (not a constant velocity).
+ * Public so the mount layer can compensate a destination for the sky's drift
+ * over the actual travel time.
+ */
+float motors_slew_duration_estimate(float distance_deg, float speed_dps);
+
 
 /*
  * Stop both axes and return to READY.
@@ -236,14 +273,18 @@ void motors_limits_load(void);
 /* Persist current limits to NVS. */
 void motors_limits_save(void);
 
-/* Set the current physical position as the new origin (home). */
-void motors_set_current_as_home(void);
+/* Set the current physical position as the new origin (home).  Returns true on
+ * success, false when the motion task could not be confirmed idle (a delayed
+ * RMT transmission) — in that case the counters are left untouched. */
+bool motors_set_current_as_home(void);
 
-/* Set axis limits from the current physical position. */
-void motors_set_current_as_ra_left_limit(void);
-void motors_set_current_as_ra_right_limit(void);
-void motors_set_current_as_dec_left_limit(void);
-void motors_set_current_as_dec_right_limit(void);
+/* Set axis limits from the current physical position.  Each returns true on
+ * success, false when the motion task could not be confirmed idle. */
+bool motors_set_current_as_ra_left_limit(void);
+bool motors_set_current_as_ra_right_limit(void);
+bool motors_set_current_as_dec_left_limit(void);
+bool motors_set_current_as_dec_right_limit(void);
 
-/* Reset limits to factory defaults and persist. */
-void motors_limits_reset(void);
+/* Reset limits to factory defaults and persist.  Returns true on success,
+ * false when the motion task could not be confirmed idle. */
+bool motors_limits_reset(void);

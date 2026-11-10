@@ -40,6 +40,15 @@ MountResult mount_slew_to_coordinates(float ra, float dec, int speed_rate) {
         return mount_result_error("Target unreachable — no valid axis solution");
     }
 
+    /* Geometric horizon: reject a GOTO whose destination — or whose monotonic
+     * RA/DEC trajectory — dips below the horizon, even when the mechanical
+     * limits admit it (MOUNT.md §9/§10). */
+    if (!motors_path_above_horizon(current.ra_axis_deg, current.dec_axis_deg,
+                                   axis.ra_axis_deg, axis.dec_axis_deg,
+                                   mount_internal_state.lat)) {
+        return mount_result_error("Target below horizon — path crosses the horizon");
+    }
+
     MotorResultCode rc1 = motors_slew_to_angle(axis.ra_axis_deg, axis.dec_axis_deg, speed_rate);
     if (rc1 != MOTOR_OK) {
         return mount_result_error("Failed to start slew to coordinates");

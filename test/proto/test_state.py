@@ -33,6 +33,7 @@ def test_state_flags_present(proto):
     assert isinstance(st["at_home"], bool)
     assert isinstance(st["time_valid"], bool)
     assert isinstance(st["at_park"], bool)
+    assert isinstance(st["position_uncertain"], bool)
 
 
 def test_state_site_config_rev_advances(proto):

@@ -33,6 +33,10 @@ typedef struct {
     float ra_speed;
     float dec_speed;
     TrackingMode tracking_mode;
+    /* Tracking mode to resume once a SLEW completes (motors_slew_to_angle /
+     * motors_slew_axis).  Carried on the SLEW itself so the slew + tracking
+     * resume are one atomic operation — never enqueued separately. */
+    TrackingMode resume_tracking;
     bool relative;
     float ra_delta_deg;
     float dec_delta_deg;
@@ -215,13 +219,20 @@ extern TaskHandle_t motors_motion_task_handle;
  * Safe to call from any task. */
 void motors_motion_stop(void);
 
+/* Graceful stop — request the motion loop to stop submitting new batches but
+ * first confirm + account the batches already committed to RMT, keeping the
+ * position counters exact.  Used by motors_stop() / motors_park(). */
+void motors_motion_stop_graceful(void);
+
 /* Dequeue and execute one motion command (extracted from the task loop).
  * Exposed so the host regression can drive the real scheduler one command at a
  * time with simulated clock/RTOS/peripherals. */
 void motors_motion_process_one(void);
 
-/* Wait (bounded) until the motion task is idle.  Call after motors_stop(). */
-void motors_motion_wait_idle(void);
+/* Wait (bounded) until the motion task is idle.  Returns true only when idle
+ * was confirmed (the semaphore was taken); false on timeout means the motion
+ * task is still running and the caller must not modify counters/limits. */
+bool motors_motion_wait_idle(void);
 
 esp_err_t motors_motion_task_init(void);
 

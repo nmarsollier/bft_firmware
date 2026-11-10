@@ -77,52 +77,76 @@ void motors_limits_save(void) {
 
 /* ── Runtime setters ─────────────────────────────────────── */
 
-void motors_set_current_as_home(void) {
+bool motors_set_current_as_home(void) {
     motors_stop();
-    motors_motion_wait_idle();
+    if (!motors_motion_wait_idle()) {
+        ESP_LOGE(TAG, "Timed out waiting for idle — home not redefined");
+        return false;
+    }
     portENTER_CRITICAL(&motors_state_lock);
     motors_state.ra_steps  = 0;
     motors_state.dec_steps = 0;
     motors_state.status    = MOTORS_STATUS_READY;
+    motors_state.position_uncertain = false;
     portEXIT_CRITICAL(&motors_state_lock);
     motors_limits_save();
+    return true;
 }
 
-void motors_set_current_as_ra_left_limit(void) {
+bool motors_set_current_as_ra_left_limit(void) {
     motors_stop();
-    motors_motion_wait_idle();
+    if (!motors_motion_wait_idle()) {
+        ESP_LOGE(TAG, "Timed out waiting for idle — RA left limit not set");
+        return false;
+    }
     float pos = motors_get_ra_deg();
     motors_state.limits.ra_min = pos;
     motors_limits_save();
+    return true;
 }
 
-void motors_set_current_as_ra_right_limit(void) {
+bool motors_set_current_as_ra_right_limit(void) {
     motors_stop();
-    motors_motion_wait_idle();
+    if (!motors_motion_wait_idle()) {
+        ESP_LOGE(TAG, "Timed out waiting for idle — RA right limit not set");
+        return false;
+    }
     float pos = motors_get_ra_deg();
     motors_state.limits.ra_max = pos;
     motors_limits_save();
+    return true;
 }
 
-void motors_set_current_as_dec_left_limit(void) {
+bool motors_set_current_as_dec_left_limit(void) {
     motors_stop();
-    motors_motion_wait_idle();
+    if (!motors_motion_wait_idle()) {
+        ESP_LOGE(TAG, "Timed out waiting for idle — DEC left limit not set");
+        return false;
+    }
     float pos = motors_get_dec_deg();
     motors_state.limits.dec_min = pos;
     motors_limits_save();
+    return true;
 }
 
-void motors_set_current_as_dec_right_limit(void) {
+bool motors_set_current_as_dec_right_limit(void) {
     motors_stop();
-    motors_motion_wait_idle();
+    if (!motors_motion_wait_idle()) {
+        ESP_LOGE(TAG, "Timed out waiting for idle — DEC right limit not set");
+        return false;
+    }
     float pos = motors_get_dec_deg();
     motors_state.limits.dec_max = pos;
     motors_limits_save();
+    return true;
 }
 
-void motors_limits_reset(void) {
+bool motors_limits_reset(void) {
     motors_stop();
-    motors_motion_wait_idle();
+    if (!motors_motion_wait_idle()) {
+        ESP_LOGE(TAG, "Timed out waiting for idle — limits not reset");
+        return false;
+    }
     portENTER_CRITICAL(&motors_state_lock);
     motors_state.limits.ra_min  = LIMITS_DEFAULT_RA_MIN;
     motors_state.limits.ra_max  = LIMITS_DEFAULT_RA_MAX;
@@ -130,4 +154,5 @@ void motors_limits_reset(void) {
     motors_state.limits.dec_max = LIMITS_DEFAULT_DEC_MAX;
     portEXIT_CRITICAL(&motors_state_lock);
     motors_limits_save();
+    return true;
 }

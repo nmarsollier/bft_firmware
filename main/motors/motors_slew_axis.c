@@ -40,17 +40,15 @@ static MotorResultCode motors_slew_axis_impl(float ra_delta_deg, float dec_delta
         .relative = true,
         .ra_delta_deg = ra_delta_deg,
         .dec_delta_deg = dec_delta_deg,
+        .resume_tracking = currTracking,
     };
     if (!motors_queue_put(&cmd)) {
-        return MOTOR_ERR_BUSY;
-    }
-
-    if (currTracking != TRACKING_NONE) {
-        MotorResultCode trk_rc = motors_start_tracking(currTracking);
-        if (trk_rc != MOTOR_OK) {
-            ESP_LOGE(TAG, "Failed to resume tracking after slew (rc=%d)", trk_rc);
-            return trk_rc;
+        /* Slew + tracking resume are one atomic operation: restore the paused
+         * tracking when the enqueue fails (the queue was just cleared). */
+        if (currTracking != TRACKING_NONE) {
+            motors_start_tracking(currTracking);
         }
+        return MOTOR_ERR_BUSY;
     }
     return MOTOR_OK;
 }

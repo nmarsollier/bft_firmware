@@ -201,7 +201,11 @@ bool mount_select_axis_solution(EquatorialCoordinates eq, AxisCoordinates curren
                 double dr = fabs(R - current.ra_axis_deg);
                 double dd = fabs(D - current.dec_axis_deg);
                 double travel = (dr > dd) ? dr : dd;
-                double duration = (speed_dps > 0.0) ? travel / speed_dps + 2.0 : 0.0;
+                /* Ramp-aware travel time: the slower axis (larger distance)
+                 * bounds the duration, and the real accel/decel ramp makes it
+                 * slower than a constant velocity — so the sidereal advance
+                 * over the move is not under-estimated. */
+                double duration = motors_slew_duration_estimate((float) travel, speed_dps);
                 double R_arr = R + TRACKING_SPEED_SIDEREAL_DPS * duration;
 
                 if (R_arr < limits->ra_min || R_arr > limits->ra_max) continue;

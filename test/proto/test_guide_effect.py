@@ -122,9 +122,11 @@ def test_pulse_at_dec_limit_rejected(proto):
     silently clamped into a partial (or zero) move."""
     setup_site_time(proto)
     _set_guide_rate(proto, GUIDE_RATE)
-    lst = proto.state()["lst"]
-    proto.action("goto", ra=lst, dec=60.0, speed=4)   # DEC axis = +150 (limit)
+    # The DEC limit (+150°) is below the geometric horizon, so it is reached by
+    # manual recovery (MoveAxis) from a known origin, not a GOTO.
+    proto.action("home")
     wait_not_moving(proto)
+    _move_dec(proto, 150.0)   # DEC axis = +150 (limit)
 
     with pytest.raises(DeviceError):
         proto.action("guide", direction="north", duration_ms=500)

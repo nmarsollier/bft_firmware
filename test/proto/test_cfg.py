@@ -67,3 +67,43 @@ def test_change_site_during_motion(proto):
     assert abs(cfg["lat"] - (-32.89)) < 0.01
 
     proto.action("stop")
+
+
+def test_valid_lat_change_rejected_while_slewing(proto):
+    """A valid latitude change is rejected while a GOTO is in flight: latitude
+    must stay fixed during active motion (MOUNT.md §10)."""
+    from conftest import setup_site_time, wait_slewing
+    from client import DeviceError
+    import pytest
+
+    setup_site_time(proto)
+    proto.action("goto", ra=6.0, dec=-60.0, speed=4)
+    wait_slewing(proto)
+
+    with pytest.raises(DeviceError):
+        proto.config_set(lat=-33.0)   # valid, but the mount is slewing
+
+    cfg = proto.config_get()["config"]
+    assert abs(cfg["lat"] - (-32.89)) < 0.01, "latitude changed during motion"
+    proto.action("stop")
+
+
+def test_lat_change_allowed_when_idle(proto):
+    """A valid latitude change is accepted when the mount is at rest."""
+    from conftest import setup_site_time
+
+    setup_site_time(proto)
+    proto.config_set(lat=-33.0)
+    assert abs(proto.config_get()["config"]["lat"] - (-33.0)) < 0.01
+    proto.config_set(lat=-32.89)   # restore
+
+
+def test_lon_change_allowed_while_slewing(proto):
+    """A longitude change is allowed during motion (only latitude is gated)."""
+    from conftest import setup_site_time, wait_slewing
+
+    setup_site_time(proto)
+    proto.action("goto", ra=6.0, dec=-60.0, speed=4)
+    wait_slewing(proto)
+    proto.config_set(lon=-70.0)   # lon change allowed during motion
+    proto.action("stop")

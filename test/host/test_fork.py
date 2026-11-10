@@ -45,6 +45,7 @@ class ForkTests(unittest.TestCase):
             str(ROOT / "main/mount/mount_get_lst.c"),
             str(ROOT / "main/mount/mount_pulse_guide.c"),
             str(ROOT / "main/mount/mount_slew_to_coordinates.c"),
+            str(ROOT / "main/motors/motors_horizon.c"),
             str(ROOT / "test/host/mount_stubs.c"), "-lm", "-o", str(lib),
         ], check=True)
         cls.lib = C.CDLL(str(lib))
@@ -269,12 +270,14 @@ class ForkTests(unittest.TestCase):
         return int(deg / step + (0.5 if deg >= 0 else -0.5))
 
     def test_goto_alternative_when_nearest_out_of_limit(self):
-        # Reproduce: current (149.99, 30), target H=149.999 dec=-60, limits ±150.
-        # The unflipped lands at R≈150.007 after compensation (past the limit); the
-        # minimum-travel selection must fall back to the flipped (≈-29.867, -30).
+        # Reproduce: current (149.99, 0), target H=149.999 dec=-60, limits ±150.
+        # The unflipped (R≈149.999, D=30) is inside the limit, but the 30° DEC
+        # travel makes the ramp-aware slew long enough that the sidereal advance
+        # pushes R past +150; the minimum-travel selection must fall back to the
+        # flipped (≈-29.8, -30).
         self.lib.host_limits(-150, 150, -150, 150)
         self.lib.host_ra(149.99)
-        self.lib.host_dec(30)
+        self.lib.host_dec(0)
         ok, called, ra, dec = self._slew(self.ha_ra(149.999), -60)
         self.assertTrue(ok)
         self.assertEqual(called, 1)
@@ -354,6 +357,43 @@ class ForkTests(unittest.TestCase):
         ok1, _, ra1, _ = self._slew(5.0, -60)
         self.assertTrue(ok0 and ok1)
         self.assertLess(abs(ra1 - ra0), 10.0)
+
+    # ── geometric horizon ──────────────────────────────────────────────
+    def test_goto_rejects_below_horizon_destination(self):
+        # dec=+60 culminating (H=0) at lat -32.89 is below the geometric
+        # horizon: its mechanical destination is D=150°, which is inside the
+        # ±150° mechanical limits yet points below the horizon.  The GOTO must
+        # be rejected before any motor motion.
+        self.lib.host_limits(-150, 150, -150, 150)
+        self.lib.host_ra(0)
+        self.lib.host_dec(0)
+        ok, called, _, _ = self._slew(self.ha_ra(0), 60)
+        self.assertFalse(ok)
+        self.assertEqual(called, 0)
+
+    def test_goto_rejected_from_below_horizon(self):
+        # Current position D=-90 is below the horizon; the destination D=60 is
+        # above it.  The monotonic path still starts below the horizon, so the
+        # conservative rectangle check must reject even though the destination
+        # itself is valid.
+        self.lib.host_limits(-150, 150, -150, 150)
+        self.lib.host_ra(0)
+        self.lib.host_dec(-90)
+        ok, called, _, _ = self._slew(self.ha_ra(0), -30)
+        self.assertFalse(ok)
+        self.assertEqual(called, 0)
+
+    def test_goto_admits_above_horizon_path(self):
+        # The same target as the rejected cases, but from a start and with
+        # limits that keep the whole path above the horizon: accepted.
+        self.lib.host_limits(-150, 150, -150, 150)
+        self.lib.host_ra(0)
+        self.lib.host_dec(0)
+        ok, called, ra, dec = self._slew(self.ha_ra(0), -60)
+        self.assertTrue(ok)
+        self.assertEqual(called, 1)
+        self.assertTrue(-150 <= ra <= 150)
+        self.assertAlmostEqual(dec, 30, delta=0.5)
 
     # ── guiding ─────────────────────────────────────────────────────────
     def _guide(self, direction, dec, lat=LAT_SOUTH):

@@ -30,7 +30,7 @@ def _measure(proto, goto_fn):
 def test_goto_speed_duration(proto, speed_rate, speed_dps):
     """The goto time matches the ramp model for the requested speed."""
     setup_site_time(proto)
-    proto.action("goto", ra=6.0, dec=-55.0, speed=4)
+    proto.action("goto", ra=6.0, dec=-62.0, speed=4)
     wait_not_moving(proto)
 
     elapsed, ra_dist, dec_dist = _measure(

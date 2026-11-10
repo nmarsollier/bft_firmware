@@ -20,6 +20,7 @@ def test_goto_across_sites(proto, lat, lon):
     proto.config_set(lat=lat, lon=lon, elevation=750,
                      utc="2026-09-28T02:00:00Z")
     # Target on the meridian (HA=0): reachable at every site regardless of the
-    # RA ±120 limit (a fixed ra=6h would fall outside ±120 at lon -74°).
+    # RA ±120 limit (a fixed ra=6h would fall outside ±120 at lon -74°), and
+    # above the geometric horizon at all three latitudes.
     lst = proto.state()["lst"]
-    assert_goto_duration(proto, lst, -60.0, 4.0)
+    assert_goto_duration(proto, lst, -30.0, 4.0)

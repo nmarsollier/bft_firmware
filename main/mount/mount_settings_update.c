@@ -25,6 +25,17 @@ MountResult mount_settings_update(MountSettings settings) {
         return vr;
     }
 
+    /*
+     * The site latitude must remain fixed while movement is active or pending
+     * (MOUNT.md §10): changing it mid-slew (and especially crossing a
+     * hemisphere) changes the reference pole and the astronomical transform.
+     * Longitude is not gated the same way.
+     */
+    if (fabsf(settings.lat - mount_internal_state.lat) > 0.0001f
+        && !motors_is_quiescent()) {
+        return mount_result_error("Cannot change latitude while the mount is moving");
+    }
+
     mount_internal_state = settings;
 
     /* Persist the updated settings. */

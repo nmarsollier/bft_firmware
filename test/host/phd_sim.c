@@ -125,6 +125,12 @@ void vSemaphoreDelete(SemaphoreHandle_t sem) { free(sem); }
 
 /* ── virtual monotonic clock (advanced by ulTaskNotifyTake / vTaskDelay) ── */
 
+/* Deferred-RMT flush helpers — defined after the RMT channel struct, but the
+ * virtual-clock functions below call them to fire in-flight TX-done events. */
+static void sim_fire_done(int axis);
+static void sim_flush(int axis, int64_t now);
+static void sim_flush_all(int64_t now);
+
 static int64_t g_virtual_time_us = 0;
 
 /* Sequence injection: a schedule of guide pulses injected during continuous
@@ -146,6 +152,7 @@ int64_t esp_timer_get_time(void) {
      * computes a zero-length sleep (the next step is due "now") it must still
      * advance the virtual clock, otherwise the loop spins forever. */
     g_virtual_time_us += 1;
+    sim_flush_all(g_virtual_time_us);
     return g_virtual_time_us;
 }
 
@@ -160,6 +167,7 @@ BaseType_t xTaskNotifyGive(TaskHandle_t t) { (void)t; return pdTRUE; }
 uint32_t ulTaskNotifyTake(BaseType_t clear, TickType_t wait) {
     (void)clear;
     g_virtual_time_us += (int64_t)wait * 1000;   /* ticks == ms */
+    sim_flush_all(g_virtual_time_us);
     while (g_schedule_idx < g_schedule_count &&
            g_virtual_time_us >= (int64_t)g_schedule[g_schedule_idx].at_ms * 1000) {
         mount_pulse_guide((GuideDirection)g_schedule[g_schedule_idx].direction,
@@ -174,6 +182,7 @@ uint32_t ulTaskNotifyTake(BaseType_t clear, TickType_t wait) {
 
 void vTaskDelay(TickType_t ticks) {
     g_virtual_time_us += (int64_t)ticks * 1000;
+    sim_flush_all(g_virtual_time_us);
 }
 void vTaskDelete(TaskHandle_t t) { (void)t; }
 
@@ -236,6 +245,31 @@ typedef struct {
 static rmt_obs_t g_rmt[2];   /* [0]=RA, [1]=DEC */
 static int g_suppress_dec = 0;
 
+/* ── deferred-RMT mode (in-flight modelling for motion-abort tests) ──
+ * Default 0 keeps the original immediate-TX-done behaviour so the PHD2 guide
+ * tests are unchanged.  When 1, rmt_transmit enqueues the transmission and the
+ * TX-done interrupt fires only after the virtual clock advances past the
+ * batch's symbol duration — reproducing a real in-flight batch that a STOP can
+ * interrupt mid-emission. */
+static int g_defer_done = 0;
+static int64_t g_phys_emitted[2];  /* steps physically emitted (oracle) */
+static int g_stop_arm_kind = -1;   /* -1 none, 0 graceful (motors_stop), 1 emergency (motors_motion_stop) */
+static int g_stop_arm_after = 0;   /* arm the stop after this many rmt_transmit calls */
+static int g_tx_count = 0;
+
+typedef struct {
+    int num_steps;
+    int64_t deadline_us;
+} sim_pending_t;
+
+#define SIM_PENDING_MAX 8
+typedef struct {
+    sim_pending_t items[SIM_PENDING_MAX];
+    int head, tail, count;
+} sim_pending_fifo_t;
+
+static sim_pending_fifo_t g_pending[2];
+
 static int channel_axis(rmt_channel_handle_t ch) {
     return ch->gpio == DEC_STEP_GPIO ? 1 : 0;
 }
@@ -271,7 +305,74 @@ esp_err_t rmt_disable(rmt_channel_handle_t ch) { ch->enabled = 0; return ESP_OK;
 esp_err_t rmt_del_channel(rmt_channel_handle_t ch) { (void)ch; return ESP_OK; }
 esp_err_t rmt_del_encoder(rmt_encoder_handle_t enc) { (void)enc; return ESP_OK; }
 esp_err_t rmt_tx_wait_all_done(rmt_channel_handle_t ch, int timeout_ms) {
-    (void)ch; (void)timeout_ms; return ESP_OK;
+    (void)timeout_ms;
+    if (g_defer_done) {
+        /* Emergency abort: the in-flight batch completes (wait_all_done) but the
+         * motion loop has already broken, so its TX-done token is orphaned — the
+         * steps are physically emitted yet never counted by the firmware. */
+        int axis = channel_axis(ch);
+        sim_pending_fifo_t *f = &g_pending[axis];
+        while (f->count > 0) {
+            g_phys_emitted[axis] += f->items[f->head].num_steps;
+            f->head = (f->head + 1) % SIM_PENDING_MAX;
+            f->count--;
+            sim_fire_done(axis);
+        }
+        return ESP_OK;
+    }
+    return ESP_OK;
+}
+
+/* Count STEP pulses (symbols with level0==1) and total emission time in us. */
+static void sim_decode(const rmt_symbol_word_t *syms, int num, int *steps, int64_t *dur_us) {
+    *steps = 0;
+    int64_t ticks = 0;
+    for (int i = 0; i < num; i++) {
+        if (syms[i].level0 == 1) (*steps)++;
+        ticks += (int64_t)syms[i].duration0 + (int64_t)syms[i].duration1;
+    }
+    *dur_us = ticks / 2;   /* 2 MHz → 1 tick = 0.5 us */
+}
+
+static void sim_pending_push(int axis, int steps, int64_t deadline_us) {
+    sim_pending_fifo_t *f = &g_pending[axis];
+    if (f->count >= SIM_PENDING_MAX) return;   /* cannot happen for ≤2 in flight */
+    f->items[f->tail] = (sim_pending_t){ steps, deadline_us };
+    f->tail = (f->tail + 1) % SIM_PENDING_MAX;
+    f->count++;
+}
+
+static void sim_fire_done(int axis) {
+    host_rmt_channel_t *ch = &g_channels[axis];
+    if (ch->on_done) {
+        rmt_tx_done_event_data_t edata = { .num_symbols = 0 };
+        ch->on_done(ch, &edata, ch->user);
+    }
+}
+
+/* Emit every transmission whose deadline has passed, firing TX-done per batch. */
+static void sim_flush(int axis, int64_t now) {
+    sim_pending_fifo_t *f = &g_pending[axis];
+    while (f->count > 0 && f->items[f->head].deadline_us <= now) {
+        g_phys_emitted[axis] += f->items[f->head].num_steps;
+        f->head = (f->head + 1) % SIM_PENDING_MAX;
+        f->count--;
+        sim_fire_done(axis);
+    }
+}
+
+static void sim_flush_all(int64_t now) {
+    sim_flush(0, now);
+    sim_flush(1, now);
+}
+
+static void sim_maybe_arm_stop(void) {
+    g_tx_count++;
+    if (g_stop_arm_kind < 0 || g_tx_count < g_stop_arm_after) return;
+    int kind = g_stop_arm_kind;
+    g_stop_arm_kind = -1;   /* one-shot */
+    if (kind == 0) motors_stop();          /* graceful */
+    else motors_motion_stop();             /* emergency */
 }
 
 esp_err_t rmt_transmit(rmt_channel_handle_t ch, rmt_encoder_handle_t enc,
@@ -294,6 +395,16 @@ esp_err_t rmt_transmit(rmt_channel_handle_t ch, rmt_encoder_handle_t enc,
     r->total_symbols += num;
     if (num > 0) r->last_pulse_ticks = (int)syms[0].duration0;
     r->last_dir = (axis == 0) ? g_dir_ra : g_dir_dec;
+
+    if (g_defer_done) {
+        /* In-flight model: the batch streams over its symbol duration and the
+         * TX-done ISR fires only when the virtual clock reaches the deadline. */
+        int steps; int64_t dur_us;
+        sim_decode(syms, num, &steps, &dur_us);
+        sim_pending_push(axis, steps, g_virtual_time_us + dur_us);
+        sim_maybe_arm_stop();
+        return ESP_OK;
+    }
 
     /* Simulate the TX-done ISR firing immediately (gives the done semaphore). */
     if (ch->on_done) {
@@ -358,6 +469,12 @@ void sim_reset(void) {
     g_schedule_idx = 0;
     g_run_budget_us = INT64_MAX;
     memset(g_rmt, 0, sizeof(g_rmt));
+    g_defer_done = 0;
+    g_stop_arm_kind = -1;
+    g_stop_arm_after = 0;
+    g_tx_count = 0;
+    memset(g_phys_emitted, 0, sizeof(g_phys_emitted));
+    memset(g_pending, 0, sizeof(g_pending));
 
     if (motion_cmd_queue == NULL) {
         motors_queue_init();
@@ -426,6 +543,54 @@ int sim_rmt_symbols(int axis) { return g_rmt[axis].total_symbols; }
 int sim_rmt_count(int axis) { return g_rmt[axis].count; }
 int sim_rmt_pulse_ticks(int axis) { return g_rmt[axis].last_pulse_ticks; }
 int sim_rmt_dir(int axis) { return g_rmt[axis].last_dir; }
+
+/* ── motion-abort harness ── */
+
+/* 1 = model in-flight RMT batches (deferred TX-done); 0 = immediate (default). */
+void sim_defer_done(int on) { g_defer_done = on; }
+
+/* Arm a one-shot stop after `after` more rmt_transmit calls.
+ * kind 0 = graceful (motors_stop), kind 1 = emergency (motors_motion_stop). */
+void sim_arm_stop(int kind, int after) { g_stop_arm_kind = kind; g_stop_arm_after = after; }
+
+/* Steps physically emitted by the simulated RMT (independent oracle). */
+int64_t sim_phys_emitted(int axis) { return g_phys_emitted[axis]; }
+
+/* Firmware's position-uncertain flag. */
+int sim_position_uncertain(void) { return motors_state.position_uncertain ? 1 : 0; }
+
+/* ── wait-idle / limits harness ── */
+
+/* Create the motion task's idle semaphore (task creation is stubbed away).
+ * Leaves the semaphore count 0 — i.e. the motion task appears "busy" — so a
+ * wait-idle call times out. */
+void sim_init_motion_task(void) { motors_motion_task_init(); }
+
+void sim_set_ra_deg(float deg) { motors_state.ra_steps = motors_deg_to_steps(deg); }
+
+/* Enqueue a single-axis RA slew (DEC target = current DEC, so DEC is idle). */
+void sim_enqueue_slew_ra(float ra_deg) {
+    MotionCommand cmd = {
+        .type = MOTION_CMD_SLEW,
+        .ra_target_deg = ra_deg,
+        .dec_target_deg = motors_steps_to_deg(motors_state.dec_steps),
+        .ra_speed = 4.0f,
+        .dec_speed = 4.0f,
+    };
+    motors_queue_put(&cmd);
+}
+
+/* Enqueue a raw DEC PulseGuide directly (bypassing mount_pulse_guide), to
+ * exercise the motion task's execution-time pole-crossing revalidation. */
+void sim_enqueue_raw_dec_guide(float offset_dps, uint32_t duration_ms) {
+    MotionCommand cmd = {
+        .type = MOTION_CMD_PULSE_GUIDE,
+        .guide_axis = 1,   /* DEC */
+        .guide_offset_dps = offset_dps,
+        .guide_duration_ms = duration_ms,
+    };
+    motors_queue_put(&cmd);
+}
 
 /* ── continuous tracking + guide sequence ── */
 

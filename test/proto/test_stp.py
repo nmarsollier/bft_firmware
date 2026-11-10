@@ -28,7 +28,7 @@ def test_stop_cancels_queued_goto(proto):
     setup_site_time(proto)
     proto.action("goto", ra=6.0, dec=-60.0, speed=4)
     wait_slewing(proto)
-    proto.action("goto", ra=7.0, dec=-50.0, speed=4)   # queued
+    proto.action("goto", ra=7.0, dec=-60.0, speed=4)   # queued
     proto.action("stop")
     wait_not_moving(proto)
     time.sleep(5.0)

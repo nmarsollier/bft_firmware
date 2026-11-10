@@ -12,6 +12,10 @@ MountResult mount_home(void) {
         return mount_result_error_state();
     }
 
+    /* HOME is the recovery mechanism: it moves to the pole (0,0), which is
+     * always above the horizon.  Do NOT gate it on the current path — a mount
+     * that ended up below the horizon must still be able to return home, the
+     * same way manual MoveAxis recovery is always allowed (MOUNT.md §11). */
     MotorResultCode rc = motors_home();
     return motors_result_code_error_result(rc);
 }

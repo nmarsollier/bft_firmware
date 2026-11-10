@@ -64,22 +64,16 @@ MotorResultCode motors_slew_to_angle(float ra_deg, float dec_deg, int speed_rate
         .dec_target_deg = dec_deg,
         .ra_speed = speed,
         .dec_speed = speed,
+        .resume_tracking = currTracking,
     };
     if (!motors_queue_put(&cmd)) {
-        return MOTOR_ERR_BUSY;
-    }
-
-    if (currTracking != TRACKING_NONE) {
-        /* Do not drop the resume silently: if the queue is momentarily full the
-         * tracking resume would be lost and the mount left stopped after a slew
-         * that was accepted.  Retry is not safe for a non-idempotent order, so
-         * surface the failure to the caller; in practice the queue was just
-         * cleared so this holds. */
-        MotorResultCode trk_rc = motors_start_tracking(currTracking);
-        if (trk_rc != MOTOR_OK) {
-            ESP_LOGE(TAG, "Failed to resume tracking after slew (rc=%d)", trk_rc);
-            return trk_rc;
+        /* Slew + tracking resume are one atomic operation.  On enqueue failure
+         * restore the tracking that was just paused (the queue was cleared by
+         * motors_stop, so this re-enqueue succeeds). */
+        if (currTracking != TRACKING_NONE) {
+            motors_start_tracking(currTracking);
         }
+        return MOTOR_ERR_BUSY;
     }
 
     return MOTOR_OK;
