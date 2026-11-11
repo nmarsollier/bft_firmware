@@ -23,7 +23,9 @@ idf_component_register(
         SRCS
         "main.c"
 
-        "power/power.c"
+        "tmc/tmc_init.c"
+        "tmc/tmc_get_initialized.c"
+        "tmc/tmc_status.c"
 
         "led/led_init.c"
         "led/led_set_state.c"
@@ -96,8 +98,8 @@ idf_component_register(
         "led"
         "mount"
         "motors"
-        "power"
         "runtime"
+        "tmc"
         "utils"
         "usb_cdc"
         "proto"
@@ -106,7 +108,6 @@ idf_component_register(
         esp_timer
         nvs_flash
         esp_driver_gpio
-        esp_driver_ledc
         esp_driver_rmt
-        esp_adc
+        esp_driver_uart
 )

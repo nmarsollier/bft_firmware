@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- * Event buzzer (active) on GPIO 9, switched through the UMC2003 Darlington.
+ * Event buzzer (active) — small module driven from a GPIO (HIGH = beep).
  *
  * Produces short audible beeps for lifecycle events: power-on, and the
  * start / end of a goto or move-axis motion.

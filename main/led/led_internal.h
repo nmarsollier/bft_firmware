@@ -1,42 +1,51 @@
+/* led_internal.h — internal API shared among the led module files. */
+
 #pragma once
 
 #include "led.h"
 #include "config.h"
-#include "driver/ledc.h"
+#include "driver/rmt_encoder.h"
+#include "driver/rmt_tx.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
-/* ── LEDC hardware configuration ──────────────────────────── */
+/* ── WS2812 RMT configuration ─────────────────────────────── */
 
-#define LED_MODE        LEDC_LOW_SPEED_MODE
-#define LED_TIMER       LEDC_TIMER_0
-#define LED_CHANNEL     LEDC_CHANNEL_0
-#define LED_FREQ_HZ     5000
-#define LED_DUTY_RES    LEDC_TIMER_13_BIT
-#define LED_DUTY_MAX    8191
+#define LED_RMT_RES_HZ      10000000  /* 10 MHz, 0.1 µs/tick */
 
-/* ── Brightness levels (13-bit range: 0 – 8191) ──────────── */
+/* WS2812 bit timing (in 0.1 µs ticks). */
+#define LED_WS2812_T0H      4         /* 0.4 µs high */
+#define LED_WS2812_T0L      9         /* 0.9 µs low  */
+#define LED_WS2812_T1H      8         /* 0.8 µs high */
+#define LED_WS2812_T1L      4         /* 0.4 µs low  */
 
-#define LED_DIM_DUTY     300  /* ~24 % */
-#define LED_BRIGHT_DUTY  2000  /* 8191 = 100 % */
+/* ── Green intensity levels ───────────────────────────────── */
 
-/* ── Timing ───────────────────────────────────────────────── */
+#define LED_NORMAL_G        64    /* dim green (idle)     */
+#define LED_SLEWING_G       200   /* bright green (slewing) */
+#define LED_ERROR_G         64    /* beacon green (fault) */
 
-#define LED_FADE_MS           1000  /* normal <-> slewing transition */
-
-/* ── Shared state (defined in led_set_state.c) ────────────── */
+/* ── Shared state ──────────────────────────────────────────── */
 
 extern LedState led_current_state;
+extern rmt_channel_handle_t led_tx_chan;
+extern rmt_encoder_handle_t led_encoder;
+
+/* Serialises led_set_color() so the persistent RMT buffer is never overwritten
+ * while a transmission is still encoding from it. */
+extern SemaphoreHandle_t led_mutex;
 
 /* ── Internal helpers ─────────────────────────────────────── */
 
-/* Start a hardware fade to target_duty over time_ms. */
-void led_start_fade(uint32_t target_duty, uint32_t time_ms);
+/* Set the WS2812 color (RGB). */
+void led_set_color(uint8_t r, uint8_t g, uint8_t b);
 
-/* Start / stop the beacon animation (blink-blink-fade-pause, error). */
+/* Start / stop the beacon animation (blink-blink-pause, error). */
 void led_beacon_start(void);
 void led_beacon_stop(void);
 
 /*
- * Internal: apply a state transition (dim / bright / breathing).
+ * Internal: apply a state transition (dim / bright / beacon).
  * Only called from led_update() — not part of the public API.
  */
 void led_set_state(LedState state);

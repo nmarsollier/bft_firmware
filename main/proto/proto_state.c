@@ -10,7 +10,7 @@
 #include <sys/time.h>
 
 #include "esp_timer.h"
-#include "power.h"
+#include "motors.h"
 
 void proto_state_snapshot(char *out, size_t cap, uint32_t id) {
     MotorsState s = motors_current_state();
@@ -62,7 +62,7 @@ void proto_state_snapshot(char *out, size_t cap, uint32_t id) {
         at_home ? "true" : "false",
         (s.status == MOTORS_STATUS_PARKED) ? "true" : "false",
         s.position_uncertain ? "true" : "false",
-        power_has_external() ? "true" : "false",
+        motors_has_power() ? "true" : "false",
         mount_time_is_valid() ? "true" : "false");
 
     proto_buf_append(out, cap, &len,

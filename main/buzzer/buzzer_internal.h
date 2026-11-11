@@ -9,9 +9,8 @@
 /*
  * Active buzzer drive levels.
  *
- * The buzzer is powered from 5V and switched through a UMC2003 Darlington
- * (sinking) output, so GPIO HIGH activates the load and sounds the buzzer;
- * GPIO LOW releases it (silent, no standing current).
+ * The buzzer is a small active-buzzer module whose I/O pin is driven from
+ * the GPIO: HIGH sounds it, LOW releases it (silent).
  */
 #define BUZZER_ACTIVE_LEVEL  1
 #define BUZZER_IDLE_LEVEL    0

@@ -266,7 +266,7 @@ class ForkTests(unittest.TestCase):
     @staticmethod
     def _quant(deg):
         """Degrees -> absolute microstep counter (mirrors motors_deg_to_steps)."""
-        step = 1.8 / (32 * 500)
+        step = 1.8 / (64 * 500)
         return int(deg / step + (0.5 if deg >= 0 else -0.5))
 
     def test_goto_alternative_when_nearest_out_of_limit(self):

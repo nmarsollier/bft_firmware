@@ -10,7 +10,7 @@
 #include "buzzer.h"
 #include "led.h"
 #include "motors.h"
-#include "power.h"
+#include "tmc.h"
 
 #define MAIN_LOOP_PERIOD_MS     200
 #define MAIN_TASK_STACK_SIZE    4096
@@ -25,9 +25,23 @@
 static void main_loop_task(void *arg) {
     (void) arg;
     const TickType_t period = pdMS_TO_TICKS(MAIN_LOOP_PERIOD_MS);
+    unsigned int tick = 0;
 
     while (true) {
-        motors_update_power(power_has_external());
+        /* Every ~1 s, probe both TMC2209s over UART as the "TMC working" sense
+         * and feed the result to the motors power gating.  While the motors are
+         * active the probe is skipped — its UART/GPIO activity would disturb the
+         * step stream — so power is assumed present and the probe resumes once
+         * the mount is idle again. */
+        if (++tick >= 5) {
+            tick = 0;
+            if (motors_is_quiescent()) {
+                motors_update_power(tmc2209_probe());
+            } else {
+                motors_update_power(true);
+            }
+        }
+
         led_update();
         buzzer_update();
         vTaskDelay(period);

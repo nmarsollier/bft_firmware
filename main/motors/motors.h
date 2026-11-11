@@ -111,11 +111,15 @@ esp_err_t motors_init(void);
 void motors_enter_error_state(void);
 
 /*
- * Update the mount's view of the external-power rail.  When power is lost
- * the motors enter ERROR and reject all motion; when power returns they
+ * Update the motors' view of the TMC2209 drivers being alive (from the UART
+ * probe).  When the drivers go silent the motors enter ERROR and reject all
+ * motion; when they answer again the drivers are re-initialised and the motors
  * recover to READY (only if the error was caused by the power loss).
  */
 void motors_update_power(bool power_ok);
+
+/* True when both TMC2209 drivers answered the last probe (cached). */
+bool motors_has_power(void);
 
 /*
  * Return a snapshot copy of the current `MotorsState`.

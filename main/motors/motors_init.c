@@ -4,6 +4,7 @@
  */
 #include "motors.h"
 #include "motors_internal.h"
+#include "tmc.h"
 
 #include "esp_log.h"
 #include "esp_err.h"
@@ -53,6 +54,16 @@ esp_err_t motors_init(void) {
         ESP_LOGE("MOTORS_INIT", "motors_motion_task_init failed: %s", esp_err_to_name(err));
         motors_enter_hardware_fault();
         return err;
+    }
+
+    /* The TMC2209s must have been configured (tmc2209_hw_init) before this
+     * point.  If they did not initialise, they may be unpowered (no 12 V) or
+     * faulty — treat it as a recoverable power fault: the periodic probe
+     * re-initialises them once they start answering again. */
+    if (!tmc2209_is_initialized()) {
+        ESP_LOGW("MOTORS_INIT", "TMC2209 not initialised — will re-init when it responds");
+        motors_enter_error_state();
+        motors_mark_power_fault();
     }
 
     return ESP_OK;

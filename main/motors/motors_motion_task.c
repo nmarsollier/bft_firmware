@@ -34,7 +34,7 @@ static const char *TAG = "MOTORS_MOTION_TASK";
  * Task stack size — sized to accommodate batch encoding loops,
  * condition checks, and FreeRTOS queue operations.
  */
-#define MOTION_TASK_STACK_WORDS 6144  /* 24 KB — room for 2×256-symbol ping-pong buffers */
+#define MOTION_TASK_STACK_BYTES 32768  /* 32 KB — room for 2×512-symbol ping-pong buffers + RMT driver.  xTaskCreatePinnedToCore takes BYTES. */
 #define MOTION_TASK_PRIORITY    23  /* near real-time */
 
 /* Step period ceiling in RMT ticks — used when velocity is zero or unknown. */
@@ -52,7 +52,13 @@ static const char *TAG = "MOTORS_MOTION_TASK";
 
 /*
  * Buffer and batch limits — unified for both axes.
- * 256 symbols (1 KB) fits one GDMA descriptor, batch ≤ 100 steps.
+ * 512 symbols (2 KB) per ping-pong buffer, batch ≤ 512 steps.
+ *
+ * The batch cap sets the duration of the *pre-generated window*.  At max slew
+ * (4 °/s) a 512-step batch streams ~7.2 ms, so the motion task has a full batch
+ * duration to encode + queue the next window before the current one drains.
+ * The previous 100-step cap made the high-speed window only ~1.4 ms — short
+ * enough that any scheduling jitter left a gap in the step stream.
  *
  * RMT_BATCH_MAX_STEPS also bounds the position error of an *emergency* abort:
  * a fault (power loss / hardware error) that cuts a batch mid-emission leaves
@@ -60,8 +66,8 @@ static const char *TAG = "MOTORS_MOTION_TASK";
  * instead of silently trusted.  A graceful stop (motors_stop / motors_park)
  * drains the committed batch and keeps the position exact.
  */
-#define RMT_BUFFER_SYMBOLS  256U
-#define RMT_BATCH_MAX_STEPS  100U
+#define RMT_BUFFER_SYMBOLS  512U
+#define RMT_BATCH_MAX_STEPS  512U
 
 TaskHandle_t motors_motion_task_handle = NULL;
 
@@ -1561,7 +1567,7 @@ esp_err_t motors_motion_task_init(void) {
     if (xTaskCreatePinnedToCore(
         motors_motion_task_run,
         "motors_motion",
-        MOTION_TASK_STACK_WORDS,
+        MOTION_TASK_STACK_BYTES,
         NULL,
         MOTION_TASK_PRIORITY,
         &motors_motion_task_handle,
