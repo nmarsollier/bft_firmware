@@ -51,8 +51,23 @@
  * Motor resolution & mechanics.
  * ========================================================================= */
 
-/* Microstep resolution — TMC2209 CHOPCONF.MRES (MRES=2).  BFT: 64 microsteps. */
-#define MOTORS_MICROSTEPS 64
+/* Microstep resolution — TMC2209 CHOPCONF.MRES (MRES=2).  BFT: 64 microsteps.
+ * This is the canonical (finest) resolution: the STEP counters are always in
+ * these units, and every non-slew motion (tracking, guiding, move-axis) runs
+ * at this resolution. */
+#define MOTORS_MICROSTEPS_TRACKING 64
+
+/* Coarse microstep resolution for large ramped slews (CHOPCONF.MRES=5).
+ * 8 µsteps cuts the STEP pulse count 8× versus 64, relaxing the RMT timing at
+ * high slew speeds; with INTPOL the driver still interpolates to 256 µsteps,
+ * so mechanical smoothness is unchanged. */
+#define MOTORS_MICROSTEPS_SLEW 8
+
+/* Gentle-slew boundary (degrees): a slew whose larger axis travel stays below
+ * this is treated gently — fine microsteps (MOTORS_MICROSTEPS_TRACKING) and a
+ * capped speed; above it the slew runs coarse (MOTORS_MICROSTEPS_SLEW) at full
+ * speed.  Single source for both the microstep switch and the ramp speed cap. */
+#define MOTORS_SLEW_GENTLE_DEG 8.0f
 
 /* TMC2209 coil current (0–31 fields, IRUN/IHOLD).  Provisional values —
  * tune on the bench for the NEMA 17; see TMC.md. */
@@ -63,7 +78,10 @@
  * Below the threshold the motors run silent StealthChop (covers tracking and
  * guiding); above it they switch to SpreadCycle, which keeps torque and stays
  * smoother at high speed (slewing).  0 = always StealthChop (silent but weak at
- * high speed).  At 64 µsteps, 250 ≈ 0.68°/s axis; lower value = higher threshold. */
+ * high speed).  TPWMTHRS=64 transitions at ~2.6°/s axis — just above where
+ * StealthChop stops regulating well.  Lower value = higher transition speed.
+ * The transition speed is independent of the microstep resolution (same at
+ * 8 or 64 µsteps, since f_STEP ∝ µ for a fixed axis speed). */
 #define TMC_TPWMTHRS 64
 
 /* Total gear reduction: 5:1 belt (20T→100T GT2 9mm) × 100:1 harmonic drive.

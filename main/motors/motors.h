@@ -145,6 +145,13 @@ float motors_steps_to_deg(int64_t steps);
 int64_t motors_deg_to_steps(float degrees);
 
 /*
+ * Current active microstep resolution on both drivers (MOTORS_MICROSTEPS_TRACKING or the
+ * coarse MOTORS_MICROSTEPS_SLEW during a large slew).  Public so the protocol
+ * layer can report it in the state snapshot.
+ */
+uint16_t motors_microsteps_active(void);
+
+/*
  * sin(geometric altitude) of a mechanical position at a site latitude (MOUNT.md
  * §9).  Pure — used by both the mount layer and the motion task.
  */
@@ -165,6 +172,13 @@ bool motors_path_above_horizon(float ra_from, float dec_from,
  * a site-latitude change while movement is active or pending (MOUNT.md §10).
  */
 bool motors_is_quiescent(void);
+
+/*
+ * True when the mount is slewing (high-speed motion).  The runtime power probe
+ * skips its UART read while slewing — the UART activity would disturb the RMT
+ * step stream — but reads during tracking (slow) and idle.
+ */
+bool motors_is_slewing(void);
 
 /*
  * Estimated single-axis slew duration (seconds) for a distance and requested

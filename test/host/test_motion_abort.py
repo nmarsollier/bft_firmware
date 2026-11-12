@@ -29,13 +29,19 @@ class MotionAbortTests(unittest.TestCase):
             "main/motors/motors_pulse_guide.c",
             "main/motors/motors_command_queue.c",
             "main/motors/motors_motion_task.c",
+            "main/motors/motors_motion_stop.c",
+            "main/motors/motors_motion_stop_graceful.c",
+            "main/motors/motors_motion_idle.c",
             "main/motors/motors_rmt.c",
             "main/motors/motors_hw.c",
             "main/motors/motors_current_state.c",
             "main/motors/motors_enter_error_state.c",
+            "main/motors/motors_microsteps.c",
+            "main/motors/motors_ramp.c",
             "main/motors/motors_get_tracking_speed.c",
             "main/motors/motors_stop.c",
             "main/motors/motors_horizon.c",
+            "test/host/tmc_stubs.c",
             "test/host/phd_sim.c",
         ]
         subprocess.run([
@@ -44,6 +50,7 @@ class MotionAbortTests(unittest.TestCase):
             "-I" + str(ROOT / "main"),
             "-I" + str(ROOT / "main/motors"),
             "-I" + str(ROOT / "main/config"),
+            "-I" + str(ROOT / "main/tmc"),
         ] + [str(ROOT / s) for s in src] + ["-lm", "-o", str(lib)], check=True)
 
         cls.lib = C.CDLL(str(lib))
@@ -61,6 +68,7 @@ class MotionAbortTests(unittest.TestCase):
         cls.lib.sim_position_uncertain.argtypes = []
         cls.lib.sim_position_uncertain.restype = C.c_int
         cls.lib.sim_set_dec_deg.argtypes = [C.c_float]
+        cls.lib.sim_set_ra_deg.argtypes = [C.c_float]
         cls.lib.motors_slew_duration_estimate.argtypes = [C.c_float, C.c_float]
         cls.lib.motors_slew_duration_estimate.restype = C.c_float
         cls.lib.sim_enqueue_raw_dec_guide.argtypes = [C.c_float, C.c_uint32]
@@ -85,6 +93,24 @@ class MotionAbortTests(unittest.TestCase):
         self.lib.sim_process_one()
         self.assertLess(self.lib.sim_ra_steps(), self.lib.sim_phys_emitted(0))
         self.assertEqual(self.lib.sim_position_uncertain(), 1)
+
+    def test_slew_lands_exact_target(self):
+        """A coarse (8 µstep) slew to a non-multiple-of-8 target closes the
+        residual at fine resolution, landing exactly on the requested position
+        instead of stopping up to 7 canonical steps short."""
+        self.lib.sim_defer_done(0)   # immediate TX-done — let the slew run to completion
+
+        # Expected target in canonical steps, using the firmware's own
+        # degrees→steps conversion (no hardcoded constant).
+        self.lib.sim_set_ra_deg(10.0)
+        target = self.lib.sim_ra_steps()
+        self.lib.sim_set_ra_deg(0.0)
+
+        self.lib.sim_enqueue_slew_ra(10.0)
+        self.lib.sim_process_one()
+
+        self.assertEqual(self.lib.sim_ra_steps(), target,
+                         "coarse slew landed short of the exact target (residual not closed)")
 
     def test_slew_duration_estimate_accounts_for_ramp(self):
         """The ramp-aware duration is slower than a constant velocity, matches

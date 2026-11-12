@@ -41,8 +41,8 @@ consumo o consultar cómo se implementa el lado Alpaca/UI, mirar ahí.
 - Motores Nema 17 (lazo abierto) con driver TMC2209 directo (configuración en TMC.md)
 - https://www.amazon.com/dp/B0C36DP9XD
 - 64 microsteps configurados por software (CHOPCONF.MRES)
-- Torque: no confirmado para la variante de 2.0 A
-- Corriente de bobina: IRUN=14, IHOLD=10
+- Torque: no confirmado para la variante de 1.4 A
+- Corriente de bobina: 1.4 A (IRUN=14, IHOLD=10)
 
 ## Placa ESP32-S3
 

@@ -57,6 +57,9 @@ void motors_update_power(bool power_ok) {
 
     if (tmc2209_reinit() == ESP_OK) {
         ESP_LOGI(TAG, "TMC power restored — motors back to READY");
+        /* tmc2209_reinit() re-configured both drivers at the tracking
+         * resolution and recorded it, so the microstep state is already in
+         * sync — no separate reset needed. */
         portENTER_CRITICAL(&motors_state_lock);
         motors_state.status = MOTORS_STATUS_READY;
         motors_state.tracking = TRACKING_NONE;

@@ -313,7 +313,10 @@ esp_err_t rmt_tx_wait_all_done(rmt_channel_handle_t ch, int timeout_ms) {
         int axis = channel_axis(ch);
         sim_pending_fifo_t *f = &g_pending[axis];
         while (f->count > 0) {
-            g_phys_emitted[axis] += f->items[f->head].num_steps;
+            /* Oracle counts canonical steps (pulses × active spp) so it stays
+             * comparable to motors_state.ra_steps at either microstep resolution. */
+            g_phys_emitted[axis] += (int64_t) f->items[f->head].num_steps
+                                    * (int64_t) motors_steps_per_pulse();
             f->head = (f->head + 1) % SIM_PENDING_MAX;
             f->count--;
             sim_fire_done(axis);
@@ -354,7 +357,8 @@ static void sim_fire_done(int axis) {
 static void sim_flush(int axis, int64_t now) {
     sim_pending_fifo_t *f = &g_pending[axis];
     while (f->count > 0 && f->items[f->head].deadline_us <= now) {
-        g_phys_emitted[axis] += f->items[f->head].num_steps;
+        g_phys_emitted[axis] += (int64_t) f->items[f->head].num_steps
+                                * (int64_t) motors_steps_per_pulse();
         f->head = (f->head + 1) % SIM_PENDING_MAX;
         f->count--;
         sim_fire_done(axis);

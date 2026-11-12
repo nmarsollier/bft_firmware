@@ -29,13 +29,13 @@ static void main_loop_task(void *arg) {
 
     while (true) {
         /* Every ~1 s, probe both TMC2209s over UART as the "TMC working" sense
-         * and feed the result to the motors power gating.  While the motors are
-         * active the probe is skipped — its UART/GPIO activity would disturb the
-         * step stream — so power is assumed present and the probe resumes once
-         * the mount is idle again. */
+         * and feed the result to the motors power gating.  During a high-speed
+         * slew the probe is skipped — its UART/GPIO activity would disturb the
+         * RMT step stream — but it runs during tracking (slow) and idle, so a
+         * power fault is still detected while the mount is tracking. */
         if (++tick >= 5) {
             tick = 0;
-            if (motors_is_quiescent()) {
+            if (!motors_is_slewing()) {
                 motors_update_power(tmc2209_probe());
             } else {
                 motors_update_power(true);

@@ -92,13 +92,42 @@ bool motors_is_valid_dec_steps(int64_t steps);
  * Angular displacement per microstep at the mount axis.
  *
  *   1.8° = NEMA 17 full-step angle
- *   MOTORS_MICROSTEPS        = 64 (TMC2209 CHOPCONF.MRES)
+ *   MOTORS_MICROSTEPS_TRACKING        = 64 (TMC2209 CHOPCONF.MRES)
  *   TOTAL_GEAR_REDUCTION     = 500:1 (5:1 belts × 100:1 harmonic drive)
  */
 static inline float motors_get_deg_per_microstep(void) {
-    return 1.8f / ((float) MOTORS_MICROSTEPS *
+    return 1.8f / ((float) MOTORS_MICROSTEPS_TRACKING *
                     TOTAL_GEAR_REDUCTION);
 }
+
+/* =========================================================================
+ * Runtime microstep resolution (motors_microsteps.c)
+ *
+ * The STEP counters stay in canonical MOTORS_MICROSTEPS_TRACKING units regardless of
+ * the active driver resolution.  A large ramped slew switches both drivers to
+ * MOTORS_MICROSTEPS_SLEW and emits one STEP pulse per `motors_steps_per_pulse()`
+ * canonical steps; every other motion runs at MOTORS_MICROSTEPS_TRACKING (factor 1).
+ * ========================================================================= */
+
+/* Canonical counter steps advanced by a single STEP pulse at the active resolution. */
+uint32_t motors_steps_per_pulse(void);
+
+/* Select the resolution for a motion command: a ramped SLEW uses the coarse
+ * resolution when either axis travels more than MOTORS_SLEW_GENTLE_DEG; every
+ * other command type uses fine.  `ra_dist`/`dec_dist` are the canonical axis
+ * distances (meaningful only for SLEW).  Returns false (and puts the mount into
+ * ERROR) when the driver switch could not be verified. */
+bool motors_microsteps_prepare(MotionCommandType type, int64_t ra_dist, int64_t dec_dist);
+
+/* =========================================================================
+ * Slew ramp profile (motors_ramp.c)
+ * ========================================================================= */
+
+/* Effective velocity (deg/s) for one axis during a slew: distance-based
+ * trapezoidal profile from MIN_SLEW_CDS up to the (capped) target and back.
+ * Pure — same inputs always produce the same output. */
+float ramp_velocity(int target_vel_cds, int64_t travelled_steps,
+                    int64_t distance_steps, int distance_cds);
 
 /* =========================================================================
  * Hardware layer — DIR GPIO control (motors_hw.c).
@@ -200,6 +229,29 @@ void motors_rmt_reset_both(void);
  * ========================================================================= */
 extern MotorsState motors_state;
 
+/* In-flight motion runtime state — set up by process_command() and consumed by
+ * the two motion loops (motors_motion_task.c).  `active`/`aborted`/`graceful`
+ * and the guide deadline/offset fields are also written from any task by
+ * motors_motion_stop() / motors_motion_stop_graceful() (their own .c files) to
+ * signal an abort; the remaining fields are single-writer (motion task only). */
+typedef struct {
+    volatile bool active;
+    volatile bool aborted;
+    volatile bool graceful;
+    MotionCommandType active_cmd_type;
+    int64_t ra_target;         /* steps */
+    int64_t dec_target;        /* steps */
+    int64_t ra_start;          /* steps — captured at motion start (for ramps) */
+    int64_t dec_start;         /* steps */
+    TrackingMode resume_tracking;
+    int64_t ra_guide_deadline_us;
+    int64_t dec_guide_deadline_us;
+    float ra_guide_offset_dps;
+    float dec_guide_offset_dps;
+} MotionState;
+
+extern MotionState s_motion;
+
 /* Latched hardware-fault tracking — see motors_enter_error_state.c.
  * A hardware fault is never cleared by a power-loss recovery. */
 void motors_enter_hardware_fault(void);
@@ -232,6 +284,19 @@ void motors_motion_stop_graceful(void);
  * Exposed so the host regression can drive the real scheduler one command at a
  * time with simulated clock/RTOS/peripherals. */
 void motors_motion_process_one(void);
+
+/* ── Motion idle signalling (motors_motion_idle.c) ──
+ * The idle semaphore is private to that file; the motion task and the control
+ * operations both go through these functions. */
+
+/* Create the idle semaphore.  Called once by the motion task init. */
+esp_err_t motors_motion_idle_init(void);
+
+/* The motion task signals it is idle (about to block on the command queue). */
+void motors_motion_idle_give(void);
+
+/* The motion task signals it is busy (it just dequeued a command). */
+void motors_motion_idle_take(void);
 
 /* Wait (bounded) until the motion task is idle.  Returns true only when idle
  * was confirmed (the semaphore was taken); false on timeout means the motion

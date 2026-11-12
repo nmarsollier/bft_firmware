@@ -2,7 +2,7 @@
  *
  * Purpose: init diagnostics — status and failure reason.
  *
- * tmc_init.c writes tmc_status / tmc_error as it configures the drivers. The
+ * tmc_driver.c writes tmc_status / tmc_error as it configures the drivers. The
  * public getters and string helpers here let upper layers report whether the
  * drivers failed and why.
  */
@@ -46,6 +46,8 @@ const char *tmc2209_error_to_string(TmcError error) {
             return "tpwmthrs_write";
         case TMC_ERROR_PWMCONF_VERIFY:
             return "pwmconf_verify";
+        case TMC_ERROR_MRES_SET:
+            return "mres_set";
         case TMC_ERROR_NONE:
         default:
             return "none";

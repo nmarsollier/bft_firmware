@@ -3,7 +3,8 @@
  * Purpose: track whether both TMC2209 drivers were initialised, for
  * tmc2209_is_initialized() (LED error signalling).
  *
- * Set by tmc_init.c once both drivers are configured and verified.
+ * Set by tmc_driver.c (tmc_configure_drivers) once both drivers are configured
+ * and verified.
  */
 
 #include "tmc.h"
