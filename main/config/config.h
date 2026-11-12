@@ -63,8 +63,8 @@
  * Below the threshold the motors run silent StealthChop (covers tracking and
  * guiding); above it they switch to SpreadCycle, which keeps torque and stays
  * smoother at high speed (slewing).  0 = always StealthChop (silent but weak at
- * high speed).  At 64 µsteps, 500 ≈ 0.34°/s axis; lower value = higher threshold. */
-#define TMC_TPWMTHRS 250
+ * high speed).  At 64 µsteps, 250 ≈ 0.68°/s axis; lower value = higher threshold. */
+#define TMC_TPWMTHRS 64
 
 /* Total gear reduction: 5:1 belt (20T→100T GT2 9mm) × 100:1 harmonic drive.
  * motor shaft turns : axis turns. */

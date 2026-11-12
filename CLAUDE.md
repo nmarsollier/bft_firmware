@@ -42,7 +42,7 @@ consumo o consultar cómo se implementa el lado Alpaca/UI, mirar ahí.
 - https://www.amazon.com/dp/B0C36DP9XD
 - 64 microsteps configurados por software (CHOPCONF.MRES)
 - Torque: no confirmado para la variante de 2.0 A
-- Corriente de bobina: IRUN=17, IHOLD=14
+- Corriente de bobina: IRUN=14, IHOLD=10
 
 ## Placa ESP32-S3
 

@@ -478,7 +478,9 @@ static bool emit_ra_tracking_step(int direction, rmt_symbol_word_t *buffer) {
     if (!s_motion.active)
         return false;
 
+    portENTER_CRITICAL(&motors_state_lock);
     motors_state.ra_steps = next;
+    portEXIT_CRITICAL(&motors_state_lock);
     return true;
 }
 
@@ -533,7 +535,9 @@ static bool check_motion_conditions(void) {
     /* External tracking stop. */
     if (motors_state.tracking == TRACKING_NONE &&
         motors_state.status == MOTORS_STATUS_TRACKING) {
+        portENTER_CRITICAL(&motors_state_lock);
         motors_state.status = MOTORS_STATUS_READY;
+        portEXIT_CRITICAL(&motors_state_lock);
         s_motion.active = false;
 
         return false;
@@ -696,7 +700,9 @@ static void process_command(MotionCommand cmd) {
                              &s_motion.dec_guide_offset_dps, &cmd);
             }
 
+            portENTER_CRITICAL(&motors_state_lock);
             motors_state.guiding = true;
+            portEXIT_CRITICAL(&motors_state_lock);
             /*
              * Set active so a standalone guide pulse (READY, no tracking)
              * actually runs its motion loop.  During tracking active is
@@ -972,7 +978,9 @@ static void slewing_loop_rmt(void) {
              * keeps the position exact.  A graceful stop then drains the
              * remaining in-flight batch after this loop; an emergency abort
              * leaves it unaccounted and marks the position uncertain. */
+            portENTER_CRITICAL(&motors_state_lock);
             motors_state.ra_steps += (int64_t)ra_sign * (int64_t)ra_batch[ra_ping];
+            portEXIT_CRITICAL(&motors_state_lock);
             ra_steps_done += ra_batch[ra_ping];
             ra_batch[ra_ping] = 0;
 
@@ -1007,7 +1015,9 @@ static void slewing_loop_rmt(void) {
             && motors_rmt_try_wait_dec()) {
             /* Confirm + account the completed batch even when a stop is
              * requested (see the RA comment above). */
+            portENTER_CRITICAL(&motors_state_lock);
             motors_state.dec_steps += (int64_t)dec_sign * (int64_t)dec_batch[dec_ping];
+            portEXIT_CRITICAL(&motors_state_lock);
             dec_steps_done += dec_batch[dec_ping];
             dec_batch[dec_ping] = 0;
 
@@ -1071,7 +1081,9 @@ static void slewing_loop_rmt(void) {
             if (ra_batch[ra_ping] == 0 && ra_batch[ra_pong] > 0) {
                 { int t = ra_ping; ra_ping = ra_pong; ra_pong = t; }
             } else if (ra_batch[ra_ping] > 0 && motors_rmt_try_wait_ra()) {
+                portENTER_CRITICAL(&motors_state_lock);
                 motors_state.ra_steps += (int64_t)ra_sign * (int64_t)ra_batch[ra_ping];
+                portEXIT_CRITICAL(&motors_state_lock);
                 ra_steps_done += ra_batch[ra_ping];
                 ra_batch[ra_ping] = 0;
                 { int t = ra_ping; ra_ping = ra_pong; ra_pong = t; }
@@ -1082,7 +1094,9 @@ static void slewing_loop_rmt(void) {
             if (dec_batch[dec_ping] == 0 && dec_batch[dec_pong] > 0) {
                 { int t = dec_ping; dec_ping = dec_pong; dec_pong = t; }
             } else if (dec_batch[dec_ping] > 0 && motors_rmt_try_wait_dec()) {
+                portENTER_CRITICAL(&motors_state_lock);
                 motors_state.dec_steps += (int64_t)dec_sign * (int64_t)dec_batch[dec_ping];
+                portEXIT_CRITICAL(&motors_state_lock);
                 dec_steps_done += dec_batch[dec_ping];
                 dec_batch[dec_ping] = 0;
                 { int t = dec_ping; dec_ping = dec_pong; dec_pong = t; }
@@ -1229,8 +1243,10 @@ static void tracking_loop_rmt(void) {
             s_motion.dec_guide_offset_dps = 0.0f;
             dec_dir_set = 0;
         }
+        portENTER_CRITICAL(&motors_state_lock);
         motors_state.guiding = (s_motion.ra_guide_deadline_us != 0
                                 || s_motion.dec_guide_deadline_us != 0);
+        portEXIT_CRITICAL(&motors_state_lock);
 
         /* Velocities for the interval starting at `now`.  Standalone
          * guiding (status != TRACKING) has a zero base rate; only tracking
@@ -1316,7 +1332,9 @@ static void tracking_loop_rmt(void) {
             }
             if (!s_motion.active) { dec_phase = 0.0; return; }
 
+            portENTER_CRITICAL(&motors_state_lock);
             motors_state.dec_steps = next;
+            portEXIT_CRITICAL(&motors_state_lock);
             dec_phase -= 1.0;
         }
         while (dec_phase <= -1.0) {
@@ -1354,7 +1372,9 @@ static void tracking_loop_rmt(void) {
             }
             if (!s_motion.active) { dec_phase = 0.0; return; }
 
+            portENTER_CRITICAL(&motors_state_lock);
             motors_state.dec_steps = next;
+            portEXIT_CRITICAL(&motors_state_lock);
             dec_phase += 1.0;
         }
 
@@ -1550,7 +1570,9 @@ void motors_motion_process_one(void) {
                   && (esp_timer_get_time() < s_motion.ra_guide_deadline_us);
     bool dec_active = (s_motion.dec_guide_deadline_us != 0)
                    && (esp_timer_get_time() < s_motion.dec_guide_deadline_us);
+    portENTER_CRITICAL(&motors_state_lock);
     motors_state.guiding = (ra_active || dec_active);
+    portEXIT_CRITICAL(&motors_state_lock);
 }
 
 /* --------------------------------------------------------------------------
