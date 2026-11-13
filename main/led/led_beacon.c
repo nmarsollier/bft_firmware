@@ -1,17 +1,31 @@
 /* Led — led_beacon.c
  *
- * Purpose: beacon animation for the fault state (unpowered TMC / motor fault).
+ * Purpose: beacon animation for the fault state (motor hardware error or
+ * unpowered motors).
  *
- * Two quick green blinks, then a pause — like a lighthouse — so a fault is
- * obvious at a glance. Driven by a one-shot esp_timer that re-arms itself.
+ * Two quick blinks, then a slow 1 s fade-out — like a lighthouse — so a
+ * fault is obvious at a glance.  Driven by a one-shot esp_timer that re-arms
+ * itself for each phase.
  */
 #include "led_internal.h"
 
 #include "esp_timer.h"
 
-/* blink -> blink -> pause -> repeat */
-static const uint32_t s_beacon_hold_ms[] = { 200, 100, 200, 900 };
-#define BEACON_STEP_COUNT (sizeof(s_beacon_hold_ms) / sizeof(s_beacon_hold_ms[0]))
+/* One step of the beacon cycle. */
+typedef struct {
+    uint32_t duty;      /* target duty for this step (13-bit) */
+    uint32_t hold_ms;   /* how long this step lasts */
+    uint32_t fade_ms;   /* fade duration to reach `duty`; 0 = instant */
+} BeaconStep;
+
+/* blink -> blink -> slow 1 s fade-out -> repeat */
+static const BeaconStep s_beacon_steps[] = {
+    { LED_BRIGHT_DUTY, 200, 0               },  /* blink 1 on  */
+    { 0,               100, 0               },  /* blink 1 off */
+    { LED_BRIGHT_DUTY, 200, 0               },  /* blink 2 on  */
+    { 0,               1000,  800  },  /* slow fade out */
+};
+#define BEACON_STEP_COUNT (sizeof(s_beacon_steps) / sizeof(s_beacon_steps[0]))
 
 static esp_timer_handle_t s_beacon_timer;
 static unsigned int       s_beacon_phase;
@@ -19,17 +33,19 @@ static unsigned int       s_beacon_phase;
 static void beacon_tick(void *arg) {
     (void) arg;
 
-    bool on = (s_beacon_phase == 0 || s_beacon_phase == 2);
-    if (on) {
-        led_set_color(0, LED_ERROR_G, 0);
+    const BeaconStep *step = &s_beacon_steps[s_beacon_phase];
+
+    if (step->fade_ms > 0) {
+        ledc_set_fade_time_and_start(LED_MODE, LED_CHANNEL, step->duty,
+                                     step->fade_ms, LEDC_FADE_NO_WAIT);
     } else {
-        led_set_color(0, 0, 0);
+        ledc_set_duty(LED_MODE, LED_CHANNEL, step->duty);
+        ledc_update_duty(LED_MODE, LED_CHANNEL);
     }
 
-    uint32_t hold_ms = s_beacon_hold_ms[s_beacon_phase];
     s_beacon_phase = (s_beacon_phase + 1) % BEACON_STEP_COUNT;
 
-    esp_timer_start_once(s_beacon_timer, (uint64_t) hold_ms * 1000UL);
+    esp_timer_start_once(s_beacon_timer, (uint64_t) step->hold_ms * 1000UL);
 }
 
 void led_beacon_start(void) {

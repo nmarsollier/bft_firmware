@@ -4,12 +4,12 @@
 #include <stdint.h>
 
 /*
- * Status LED — the onboard WS2812 RGB indicator (GPIO 48), shown green.
+ * LED states for the external indicator on GPIO 5.
  *
- * NORMAL   — dim green, mount idle.
- * SLEWING  — bright green, mount in motion.
- * ERROR    — green beacon (blink-blink-pause), fatal fault: motor hardware
- *            error or unpowered TMC drivers.
+ * NORMAL     — dim brightness (~24 %), mount idle.
+ * SLEWING    — full brightness (100 %), mount in motion.
+ * ERROR      — beacon (blink-blink, slow fade-out), fatal fault:
+ *              motor hardware error or unpowered motors.
  *
  * All state decisions are made inside led_update(), which is the
  * single public entry point for LED state changes. It inspects motor
@@ -22,7 +22,7 @@ typedef enum {
     LED_STATE_ERROR
 } LedState;
 
-/* Initialise the WS2812 (RMT) driver and start in NORMAL (dim green). */
+/* Initialise LEDC PWM on GPIO 5 and start in NORMAL (dim). */
 void led_init(void);
 
 /*

@@ -80,7 +80,7 @@ consumo o consultar cómo se implementa el lado Alpaca/UI, mirar ahí.
 | 13   | TMC RA RX         | UART1 RX → PDN_UART del TMC de RA (directo)          |
 | 17   | TMC DEC TX        | UART2 TX → 1 kΩ → PDN_UART del TMC de DEC            |
 | 18   | TMC DEC RX        | UART2 RX → PDN_UART del TMC de DEC (directo)         |
-| 48   | LED onboard       | WS2812 RGB, mostrado en verde (via RMT)              |
+| 5    | LED externo       | Indicador externo via LEDC PWM (anodo con R en serie, catodo a GND) |
 | 1    | BUZZER            | Buzzer activo (modulo) en GPIO 1 (HIGH = beep)       |
 
 **Conexion a los TMC2209 (sin level shifting):**
@@ -127,7 +127,7 @@ App de escritorio Go (Alpaca/UI) → USB CDC-ACM → Proto → Mount (orquestaci
 - **Runtime** (`main/runtime/`) — Inicializacion y ciclo de vida del sistema.
 - **Motors** (`main/motors/`) — Control de motores de alto nivel y ejecucion hardware: GPIO DIR, RMT para STEP.
 - **TMC** (`main/tmc/`) — Configuracion y sondeo de los dos TMC2209 por UART single-wire: registros, microsteps, corriente y el sense "TMC funcionando".
-- **LED** (`main/led/`) — LED WS2812 onboard (GPIO 48) via RMT, mostrado en verde. Estados: tenue (normal), brillante (slewing), respiracion (error).
+- **LED** (`main/led/`) — LED indicador externo (GPIO 5) via LEDC PWM. Estados: tenue (normal), brillante (slewing), baliza blink-blink-fade (error). El LED WS2812 onboard (GPIO 48) ya no se usa y queda apagado.
 - **Buzzer** (`main/buzzer/`) — Buzzer activo de eventos (modulo) en GPIO 1 (HIGH = beep). Beeps de arranque, inicio y fin de goto/move axis.
 
 ## Reglas generales

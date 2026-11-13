@@ -41,11 +41,13 @@
 #define TMC_DEC_TX_GPIO   GPIO_NUM_17
 #define TMC_DEC_RX_GPIO   GPIO_NUM_18
 
-/* Status LED — onboard WS2812 RGB, driven via RMT (green = channel G). */
-#define LED_GPIO        GPIO_NUM_48
+/* Status LED — external indicator on GPIO 5, driven via LEDC PWM.  The GPIO
+ * sources current (3.3 V) into the anode through a series resistor; the
+ * cathode is tied direct to GND. */
+#define LED_GPIO        GPIO_NUM_5
 
 /* Active event buzzer — small module, I/O pin driven from the GPIO (HIGH = beep). */
-#define BUZZER_GPIO     GPIO_NUM_1
+#define BUZZER_GPIO     GPIO_NUM_4
 
 /* =========================================================================
  * Motor resolution & mechanics.
