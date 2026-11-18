@@ -42,12 +42,12 @@ const char *tmc2209_error_to_string(TmcError error) {
             return "ihold_write";
         case TMC_ERROR_CHOPCONF_VERIFY:
             return "chopconf_verify";
-        case TMC_ERROR_TPWMTHRS_WRITE:
-            return "tpwmthrs_write";
         case TMC_ERROR_PWMCONF_VERIFY:
             return "pwmconf_verify";
         case TMC_ERROR_MRES_SET:
             return "mres_set";
+        case TMC_ERROR_CHOP_MODE_SET:
+            return "chop_mode_set";
         case TMC_ERROR_NONE:
         default:
             return "none";

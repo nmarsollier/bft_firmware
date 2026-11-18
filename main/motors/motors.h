@@ -76,7 +76,9 @@ typedef struct {
      * when the origin is re-established (set-current-as-home). */
     bool position_uncertain;
 
-    /* Operational limits enforced by the motors module. */
+    /* Operational limits enforced by the motors module.  They can be narrowed
+     * at runtime but are always clamped inside the hard physical travel bounds
+     * (see motors_limits.c) — never widened past them. */
     struct {
         float ra_min;
         float ra_max;

@@ -1,9 +1,10 @@
 /* TMC — tmc_driver.c
  *
  * Purpose: full driver register configuration — the per-axis init sequence
- * (GCONF/IHOLD_IRUN/CHOPCONF/TPWMTHRS/PWMCONF) plus the shared
+ * (GCONF/IHOLD_IRUN/CHOPCONF/PWMCONF) plus the shared
  * configure-all-drivers entry used by both tmc2209_hw_init() and
- * tmc2209_reinit().  Also owns the active microstep resolution state.
+ * tmc2209_reinit().  Also owns the active microstep resolution and chopper
+ * mode state.
  */
 
 #include "tmc.h"
@@ -39,6 +40,10 @@ _Static_assert(MOTORS_MICROSTEPS_SLEW == 256 || MOTORS_MICROSTEPS_SLEW == 128 ||
  * always the real hardware value — the motors layer trusts it via
  * tmc2209_get_microsteps(). */
 uint16_t tmc_microsteps = MOTORS_MICROSTEPS_TRACKING;
+
+/* Active chopper mode on both drivers.  Same trust rule as tmc_microsteps:
+ * only ever written after a verified read-back. */
+TmcChopMode tmc_chop_mode = TMC_CHOP_STEALTH;
 
 /* ── MRES conversion ───────────────────────────────────────── */
 
@@ -103,9 +108,9 @@ static esp_err_t tmc_write_verified(const TmcAxis *axis, uint8_t reg,
 }
 
 /*
- * Write a write-only register (IHOLD_IRUN, TPWMTHRS) and verify the driver
- * accepted it: IFCNT increments on every valid write. Write-only registers
- * cannot be read back, so IFCNT is the only available proof of acceptance.
+ * Write the write-only IHOLD_IRUN register and verify the driver accepted it:
+ * IFCNT increments on every valid write. Write-only registers cannot be read
+ * back, so IFCNT is the only available proof of acceptance.
  */
 static esp_err_t tmc_write_only_verified(const TmcAxis *axis, uint8_t reg,
                                          uint32_t value)
@@ -123,6 +128,22 @@ static esp_err_t tmc_write_only_verified(const TmcAxis *axis, uint8_t reg,
     return ESP_FAIL;
 }
 
+/* ── SPREAD pin sense (shared with tmc_set_chop_mode.c) ───── */
+
+/*
+ * Read the SPREAD pin level (IOIN[8]).  Returns false when the read fails; the
+ * caller then assumes SPREAD=LOW (spread_high stays false), matching the init
+ * default below.
+ */
+bool tmc_read_spread_pin(const TmcAxis *axis, bool *spread_high) {
+    uint32_t ioin = 0;
+    if (tmc_read_register(axis, TMC_REG_IOIN, &ioin) != ESP_OK) {
+        return false;
+    }
+    *spread_high = (ioin & (1U << 8)) != 0;   /* IOIN[8] = SPREAD pin level */
+    return true;
+}
+
 /* ── Driver init (write + verify) ──────────────────────────── */
 
 static esp_err_t tmc_init_driver(const TmcAxis *axis, uint16_t microsteps)
@@ -133,20 +154,17 @@ static esp_err_t tmc_init_driver(const TmcAxis *axis, uint16_t microsteps)
     ESP_LOGI(TAG, "--- Initialising axis %s [UART %d, TX %d, RX %d] ---",
              axis->name, axis->uart_num, axis->tx_gpio, axis->rx_gpio);
 
-    /* ── GCONF: StealthChop base (silent below the TPWMTHRS threshold) ──
+    /* ── GCONF: StealthChop base (chopper mode forced at runtime) ──
      * The SPREAD pin inverts en_SpreadCycle (spread_forzado = en_SpreadCycle
      * XOR SPREAD), so read its level from IOIN and set en_SpreadCycle (bit 2)
      * to the SAME value — this neutralises the inversion and keeps the base
-     * mode StealthChop whatever the board's SPREAD wiring is.  With TPWMTHRS
-     * > 0 the driver then falls back to SpreadCycle above the speed threshold
-     * (smoother, more torque at high speed).
+     * mode StealthChop whatever the board's SPREAD wiring is.  TPWMTHRS stays
+     * at reset (0 = always StealthChop), so the mode is switched exclusively
+     * through this bit by tmc2209_set_chop_mode().
      * mstep_reg_select (bit 7) = 1 takes microsteps from CHOPCONF.MRES;
      * pdn_disable (bit 6) = 1 keeps PDN_UART as a pure UART. */
-    uint32_t ioin = 0;
     bool spread_high = false;
-    if (tmc_read_register(axis, TMC_REG_IOIN, &ioin) == ESP_OK) {
-        spread_high = (ioin & (1U << 8)) != 0;   /* IOIN[8] = SPREAD pin level */
-    }
+    (void) tmc_read_spread_pin(axis, &spread_high);   /* default LOW on failure */
     uint32_t gconf = 0x000000C0 | (spread_high ? (1U << 2) : 0);
     uint32_t gconf_mask = (1U << 7) | (1U << 6) | (1U << 2);
     result = tmc_write_verified(axis, TMC_REG_GCONF, gconf, gconf_mask, &verify);
@@ -197,15 +215,6 @@ static esp_err_t tmc_init_driver(const TmcAxis *axis, uint16_t microsteps)
 
     ESP_LOGI(TAG, "%s: CHOPCONF verified — %u µsteps (0x%08lX)",
              axis->name, verified_msteps, (unsigned long)verify);
-
-    /* ── TPWMTHRS (write-only): speed threshold for StealthChop → SpreadCycle ── */
-    result = tmc_write_only_verified(axis, TMC_REG_TPWMTHRS, TMC_TPWMTHRS);
-    if (result != ESP_OK) {
-        tmc_status = TMC_ERROR;
-        tmc_error = TMC_ERROR_TPWMTHRS_WRITE;
-        ESP_LOGE(TAG, "%s: TPWMTHRS write not accepted", axis->name);
-        return result;
-    }
 
     /* ── PWMCONF: silent StealthChop PWM ──
      * PWM_AUTOSCALE + PWM_AUTOGRAD auto-tune the current regulation for the
@@ -282,8 +291,9 @@ esp_err_t tmc_configure_drivers(void) {
         return ESP_FAIL;
     }
 
-    /* same value the drivers were just verified with */
+    /* same values the drivers were just verified with */
     tmc_microsteps = MOTORS_MICROSTEPS_TRACKING;
+    tmc_chop_mode = TMC_CHOP_STEALTH;
     tmc2209_set_initialized(true);
     tmc_status = TMC_OK;
     tmc_error = TMC_ERROR_NONE;

@@ -406,6 +406,13 @@ spread_forzado = GCONF.en_SpreadCycle XOR nivel_del_pin_SPREAD
 | 0 | 0 | StealthChop; cambio por velocidad deshabilitado |
 | 0 | >0 | StealthChop a baja velocidad; SpreadCycle por encima del umbral |
 
+> **Firmware BFT:** no se escribe TPWMTHRS (queda en su reset, 0). El modo se
+> selecciona explícitamente por movimiento vía `GCONF.en_SpreadCycle`:
+> StealthChop para tracking/guiding/slews suaves y SpreadCycle para slews
+> largos (`motors_microsteps.c`, `tmc_set_chop_mode.c`). Así el cambio ocurre
+> una sola vez, en reposo, antes de arrancar el movimiento — nunca a mitad de
+> rampa.
+
 ### 7.2 TSTEP — 0x12
 
 - Campo: `[19:0]`, lectura.

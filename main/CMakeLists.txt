@@ -30,6 +30,8 @@ idf_component_register(
         "tmc/tmc_reinit.c"
         "tmc/tmc_set_microsteps.c"
         "tmc/tmc_get_microsteps.c"
+        "tmc/tmc_set_chop_mode.c"
+        "tmc/tmc_get_chop_mode.c"
         "tmc/tmc_get_initialized.c"
         "tmc/tmc_status.c"
 

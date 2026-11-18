@@ -55,6 +55,26 @@ esp_err_t tmc2209_set_microsteps(uint16_t microsteps);
  */
 uint16_t tmc2209_get_microsteps(void);
 
+/* Chopper mode selected per motion strategy (see motors_microsteps.c). */
+typedef enum {
+    TMC_CHOP_STEALTH = 0,   /* silent PWM control — tracking, guiding, gentle slews */
+    TMC_CHOP_SPREAD,        /* SpreadCycle chopper — coarse slews */
+} TmcChopMode;
+
+/*
+ * Change the chopper mode on both drivers at runtime: read-modify-write of
+ * GCONF.en_SpreadCycle (accounting for the SPREAD pin inversion), verified by
+ * read-back with retries.  Returns ESP_OK only when BOTH drivers latched the
+ * requested mode.  Must be called with the mount otherwise idle (no STEP stream).
+ */
+esp_err_t tmc2209_set_chop_mode(TmcChopMode mode);
+
+/*
+ * Current active chopper mode on both drivers.  The value is only ever recorded
+ * after a verified read-back, so it is always the real one.
+ */
+TmcChopMode tmc2209_get_chop_mode(void);
+
 /*
  * Query whether both TMC2209 UARTs and drivers were initialised successfully.
  * Used for error-state LED signalling.
@@ -79,9 +99,9 @@ typedef enum {
     TMC_ERROR_GCONF_WRITE,     /* GCONF write + readback */
     TMC_ERROR_IHOLD_WRITE,     /* IHOLD_IRUN write (IFCNT verify) */
     TMC_ERROR_CHOPCONF_VERIFY, /* CHOPCONF write + readback / MRES mismatch */
-    TMC_ERROR_TPWMTHRS_WRITE,  /* TPWMTHRS write (IFCNT verify) */
     TMC_ERROR_PWMCONF_VERIFY,  /* PWMCONF write + readback */
-    TMC_ERROR_MRES_SET         /* runtime microstep switch: CHOPCONF.MRES write + readback */
+    TMC_ERROR_MRES_SET,        /* runtime microstep switch: CHOPCONF.MRES write + readback */
+    TMC_ERROR_CHOP_MODE_SET    /* runtime chop mode switch: GCONF.en_SpreadCycle write + readback */
 } TmcError;
 
 TmcStatus tmc2209_get_status(void);

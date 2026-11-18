@@ -1,8 +1,12 @@
 /* Motors - motors_microsteps.c
  *
- * Purpose: select the TMC2209 microstep resolution per motion — coarse
- * (MOTORS_MICROSTEPS_SLEW) for large ramped slews, fine
- * (MOTORS_MICROSTEPS_TRACKING) for everything else.
+ * Purpose: select the TMC2209 microstep resolution and chopper mode per motion —
+ * coarse (MOTORS_MICROSTEPS_SLEW, SpreadCycle) for large ramped slews, fine
+ * (MOTORS_MICROSTEPS_TRACKING, StealthChop) for everything else.
+ *
+ * The chopper mode follows the resolution so the StealthChop→SpreadCycle switch
+ * happens once, at standstill, before motion starts — never mid-ramp (which is
+ * what an automatic TPWMTHRS threshold would cause).
  *
  * The STEP counters stay in canonical fine units; the motion loop converts to
  * coarse pulses through motors_steps_per_pulse().  The active resolution is
@@ -48,8 +52,29 @@ static bool apply_microsteps(uint16_t target) {
     return true;
 }
 
+/*
+ * Apply `mode` to both drivers.  Same contract as apply_microsteps(): a no-op
+ * when the drivers are already in the mode, and stop+ERROR on a failed switch.
+ */
+static bool apply_chop_mode(TmcChopMode mode) {
+    if (mode == tmc2209_get_chop_mode()) {
+        return true;
+    }
+
+    if (tmc2209_set_chop_mode(mode) != ESP_OK) {
+        ESP_LOGE(TAG, "chop mode switch to %s failed — stop + ERROR",
+                 mode == TMC_CHOP_SPREAD ? "SpreadCycle" : "StealthChop");
+        motors_motion_stop();
+        motors_enter_error_state();
+        return false;
+    }
+
+    return true;
+}
+
 bool motors_microsteps_prepare(MotionCommandType type, int64_t ra_dist, int64_t dec_dist) {
     uint16_t target = MOTORS_MICROSTEPS_TRACKING;
+    TmcChopMode chop = TMC_CHOP_STEALTH;
 
     if (type == MOTION_CMD_SLEW) {
         float ra_deg = motors_steps_to_deg(ra_dist);
@@ -57,8 +82,9 @@ bool motors_microsteps_prepare(MotionCommandType type, int64_t ra_dist, int64_t 
         float max_deg = fmaxf(fabsf(ra_deg), fabsf(dec_deg));
         if (max_deg > MOTORS_SLEW_GENTLE_DEG) {
             target = MOTORS_MICROSTEPS_SLEW;
+            chop = TMC_CHOP_SPREAD;
         }
     }
 
-    return apply_microsteps(target);
+    return apply_microsteps(target) && apply_chop_mode(chop);
 }
