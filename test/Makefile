@@ -11,10 +11,9 @@ SERIAL ?=
 
 .PHONY: flash test-cdc
 
-# Flash the firmware as a test build: separate build dir (build.test) + sdkconfig.test
-# (CONFIG_BFT_TEST_BUILD=y, external-power gating disabled) so the suite runs over USB
-# without the 12V rail.  The production build/ and sdkconfig are left untouched, so a
-# later `idf.py build` still flashes with the safety gate enabled.
+# Flash the firmware as a test build: separate build dir (build.test) + sdkconfig.test.
+# The production build/ and sdkconfig are left untouched.  Note: motion requires the
+# 12V rail so the TMC2209s answer their UART probe ("TMC working" gate).
 flash:
 	@test -n "$(PORT)" || { echo "No BFT USB-Serial/JTAG port found — is the board connected and in boot mode? (override with PORT=/dev/cu.usbserial-XXXX)"; exit 1; }
 	cd .. && source ~/.espressif/v6.0.1/esp-idf/export.sh && idf.py -B build.test -DSDKCONFIG=sdkconfig.test -p $(PORT) flash

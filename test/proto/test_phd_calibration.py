@@ -22,7 +22,7 @@ from conftest import setup_site_time, wait_not_moving, wait_tracking, wait_until
 # Independent oracle — never derived from the firmware's own motion functions.
 SIDEREAL_DPS = 0.004178074
 GUIDE_DPS = 0.5 * SIDEREAL_DPS        # 0.002089037 deg/s (NOT 0.5 deg/s)
-DEG_PER_STEP = 1.8 / (32 * 500)       # 0.0001125 deg/microstep
+DEG_PER_STEP = 1.8 / (64 * 500)       # 0.00005625 deg/microstep
 
 
 def _expected_steps(duration_ms):

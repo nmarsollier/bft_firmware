@@ -1,10 +1,11 @@
-/* LED — led_beacon.c
+/* Led — led_beacon.c
  *
- * Purpose: beacon animation for the "no external power" state.
+ * Purpose: beacon animation for the fault state (motor hardware error or
+ * unpowered motors).
  *
- * Two quick blinks, then a slow 1 s fade-out — like a lighthouse — so an
- * unpowered mount is obvious at a glance.  Driven by a one-shot esp_timer
- * that re-arms itself for each phase.
+ * Two quick blinks, then a slow 1 s fade-out — like a lighthouse — so a
+ * fault is obvious at a glance.  Driven by a one-shot esp_timer that re-arms
+ * itself for each phase.
  */
 #include "led_internal.h"
 

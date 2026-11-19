@@ -76,7 +76,9 @@ typedef struct {
      * when the origin is re-established (set-current-as-home). */
     bool position_uncertain;
 
-    /* Operational limits enforced by the motors module. */
+    /* Operational limits enforced by the motors module.  They can be narrowed
+     * at runtime but are always clamped inside the hard physical travel bounds
+     * (see motors_limits.c) — never widened past them. */
     struct {
         float ra_min;
         float ra_max;
@@ -111,11 +113,15 @@ esp_err_t motors_init(void);
 void motors_enter_error_state(void);
 
 /*
- * Update the mount's view of the external-power rail.  When power is lost
- * the motors enter ERROR and reject all motion; when power returns they
+ * Update the motors' view of the TMC2209 drivers being alive (from the UART
+ * probe).  When the drivers go silent the motors enter ERROR and reject all
+ * motion; when they answer again the drivers are re-initialised and the motors
  * recover to READY (only if the error was caused by the power loss).
  */
 void motors_update_power(bool power_ok);
+
+/* True when both TMC2209 drivers answered the last probe (cached). */
+bool motors_has_power(void);
 
 /*
  * Return a snapshot copy of the current `MotorsState`.
@@ -141,6 +147,13 @@ float motors_steps_to_deg(int64_t steps);
 int64_t motors_deg_to_steps(float degrees);
 
 /*
+ * Current active microstep resolution on both drivers (MOTORS_MICROSTEPS_TRACKING or the
+ * coarse MOTORS_MICROSTEPS_SLEW during a large slew).  Public so the protocol
+ * layer can report it in the state snapshot.
+ */
+uint16_t motors_microsteps_active(void);
+
+/*
  * sin(geometric altitude) of a mechanical position at a site latitude (MOUNT.md
  * §9).  Pure — used by both the mount layer and the motion task.
  */
@@ -161,6 +174,13 @@ bool motors_path_above_horizon(float ra_from, float dec_from,
  * a site-latitude change while movement is active or pending (MOUNT.md §10).
  */
 bool motors_is_quiescent(void);
+
+/*
+ * True when the mount is slewing (high-speed motion).  The runtime power probe
+ * skips its UART read while slewing — the UART activity would disturb the RMT
+ * step stream — but reads during tracking (slow) and idle.
+ */
+bool motors_is_slewing(void);
 
 /*
  * Estimated single-axis slew duration (seconds) for a distance and requested

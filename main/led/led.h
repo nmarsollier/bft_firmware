@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 /*
- * LED states for the external indicator on GPIO 1.
+ * LED states for the external indicator on GPIO 5.
  *
  * NORMAL     — dim brightness (~24 %), mount idle.
  * SLEWING    — full brightness (100 %), mount in motion.
@@ -22,11 +22,11 @@ typedef enum {
     LED_STATE_ERROR
 } LedState;
 
-/* Initialise LEDC PWM on GPIO 1 and start in NORMAL (dim). */
+/* Initialise LEDC PWM on GPIO 5 and start in NORMAL (dim). */
 void led_init(void);
 
 /*
- * Periodic update, call every ~50 ms from the runtime loop.
+ * Periodic update, call every ~200 ms from the runtime loop.
  *
  * Inspects the motors and transitions the LED to
  * the correct state.  This is the ONLY public function that changes LED

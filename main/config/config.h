@@ -1,7 +1,7 @@
 #pragma once
 
 #include "driver/gpio.h"
-#include "hal/adc_types.h"
+#include "driver/uart.h"
 
 /*
  * Mount hardware configuration.
@@ -22,33 +22,64 @@
 #define MOUNT_FIRMWARE_VERSION "0.1.0" /* TODO: bump to the real version */
 
 /* =========================================================================
- * Pin assignments — BFT (ESP32-S3 44-pin board).
+ * Pin assignments — BFT (ESP32-S3 44-pin board, TMC2209 revision).
  * ========================================================================= */
 
-/* Step / direction pins (contiguous GPIO 14→11 for clean PCB routing): */
-#define DEC_STEP_GPIO  GPIO_NUM_14
-#define DEC_DIR_GPIO   GPIO_NUM_13
-#define RA_STEP_GPIO   GPIO_NUM_12
-#define RA_DIR_GPIO    GPIO_NUM_11
+/* Step / direction pins — direct to the TMC2209 STEP/DIR inputs (3.3 V logic,
+ * no level shifting). */
+#define DEC_STEP_GPIO  GPIO_NUM_15
+#define DEC_DIR_GPIO   GPIO_NUM_7
+#define RA_STEP_GPIO   GPIO_NUM_10
+#define RA_DIR_GPIO    GPIO_NUM_9
 
-/* Status LED — direct GPIO, LEDC PWM. */
-#define LED_GPIO        GPIO_NUM_1
+/* TMC2209 drivers — one single-wire UART per axis (TX through a 1 kΩ series
+ * resistor, RX direct to the PDN_UART line). */
+#define TMC_RA_UART_NUM   UART_NUM_1
+#define TMC_RA_TX_GPIO    GPIO_NUM_12
+#define TMC_RA_RX_GPIO    GPIO_NUM_13
+#define TMC_DEC_UART_NUM  UART_NUM_2
+#define TMC_DEC_TX_GPIO   GPIO_NUM_17
+#define TMC_DEC_RX_GPIO   GPIO_NUM_18
 
-/* Active buzzer — switched through UMC2003 (sinking), GPIO HIGH = beep. */
-#define BUZZER_GPIO     GPIO_NUM_9
+/* Status LED — external indicator on GPIO 5, driven via LEDC PWM.  The GPIO
+ * sources current (3.3 V) into the anode through a series resistor; the
+ * cathode is tied direct to GND. */
+#define LED_GPIO        GPIO_NUM_5
 
-/* External 5v5 rail detection — GPIO 8 (ADC1_CH7), 10k/10k divider on the
- * LM2596 5.5V output. */
-#define POWER_SENSE_ADC_UNIT    ADC_UNIT_1
-#define POWER_SENSE_ADC_CHANNEL ADC_CHANNEL_7
+/* Active event buzzer — small module, I/O pin driven from the GPIO (HIGH = beep). */
+#define BUZZER_GPIO     GPIO_NUM_4
 
 /* =========================================================================
  * Motor resolution & mechanics.
  * ========================================================================= */
 
-/* Microstep resolution — TB6600 driver DIP-switch setting (SW1-SW3).
- * BFT: 32 microsteps = 6400 steps/revolution. */
-#define MOTORS_MICROSTEPS 32
+/* Microstep resolution — TMC2209 CHOPCONF.MRES (MRES=2).  BFT: 64 microsteps.
+ * This is the canonical (finest) resolution: the STEP counters are always in
+ * these units, and every non-slew motion (tracking, guiding, move-axis) runs
+ * at this resolution. */
+#define MOTORS_MICROSTEPS_TRACKING 64
+
+/* Coarse microstep resolution for large ramped slews (CHOPCONF.MRES=5).
+ * 8 µsteps cuts the STEP pulse count 8× versus 64, relaxing the RMT timing at
+ * high slew speeds; with INTPOL the driver still interpolates to 256 µsteps,
+ * so mechanical smoothness is unchanged. */
+#define MOTORS_MICROSTEPS_SLEW 8
+
+/* Gentle-slew boundary (degrees): a slew whose larger axis travel stays below
+ * this is treated gently — fine microsteps (MOTORS_MICROSTEPS_TRACKING) and a
+ * capped speed; above it the slew runs coarse (MOTORS_MICROSTEPS_SLEW) at full
+ * speed.  Single source for both the microstep switch and the ramp speed cap. */
+#define MOTORS_SLEW_GENTLE_DEG 8.0f
+
+/* TMC2209 coil current (0–31 fields, IRUN/IHOLD).  Provisional values —
+ * tune on the bench for the NEMA 17; see TMC.md. */
+#define TMC_IRUN  14
+#define TMC_IHOLD 10
+
+/* Chopper mode follows the microstep strategy: StealthChop for tracking and
+ * gentle slews, SpreadCycle for coarse slews.  It is forced via GCONF.en_SpreadCycle
+ * (see motors_microsteps.c / tmc_set_chop_mode.c); TPWMTHRS is left at reset (0)
+ * so no automatic speed-based transition occurs mid-motion. */
 
 /* Total gear reduction: 5:1 belt (20T→100T GT2 9mm) × 100:1 harmonic drive.
  * motor shaft turns : axis turns. */

@@ -7,7 +7,7 @@ from client import DeviceError
 from conftest import axis_position, setup_site_time, wait_not_moving
 
 GUIDE_RATE = 0.5          # deg/s
-DEG_PER_STEP = 1.8 / (32 * 500)   # 32 microsteps × 500:1 reduction
+DEG_PER_STEP = 1.8 / (64 * 500)   # 64 microsteps × 500:1 reduction
 
 # The mount's default guide rate (0.5 × sidereal).  GUIDE_RATE above is a
 # manual-slew speed (239 × sidereal) chosen only to make coarse magnitude/direction

@@ -23,7 +23,17 @@ idf_component_register(
         SRCS
         "main.c"
 
-        "power/power.c"
+        "tmc/tmc_uart.c"
+        "tmc/tmc_driver.c"
+        "tmc/tmc_hw_init.c"
+        "tmc/tmc_probe.c"
+        "tmc/tmc_reinit.c"
+        "tmc/tmc_set_microsteps.c"
+        "tmc/tmc_get_microsteps.c"
+        "tmc/tmc_set_chop_mode.c"
+        "tmc/tmc_get_chop_mode.c"
+        "tmc/tmc_get_initialized.c"
+        "tmc/tmc_status.c"
 
         "led/led_init.c"
         "led/led_set_state.c"
@@ -36,6 +46,8 @@ idf_component_register(
 
         "motors/motors_current_state.c"
         "motors/motors_enter_error_state.c"
+        "motors/motors_microsteps.c"
+        "motors/motors_ramp.c"
         "motors/motors_get_slewing_speed.c"
         "motors/motors_get_move_axis_speed.c"
         "motors/motors_get_tracking_speed.c"
@@ -43,6 +55,7 @@ idf_component_register(
         "motors/motors_horizon.c"
         "motors/motors_init.c"
         "motors/motors_is_quiescent.c"
+        "motors/motors_is_slewing.c"
         "motors/motors_move_axis_speed.c"
         "motors/motors_park.c"
         "motors/motors_unpark.c"
@@ -57,6 +70,9 @@ idf_component_register(
         "motors/motors_rmt.c"
         "motors/motors_command_queue.c"
         "motors/motors_motion_task.c"
+        "motors/motors_motion_stop.c"
+        "motors/motors_motion_stop_graceful.c"
+        "motors/motors_motion_idle.c"
         "motors/motors_pulse_guide.c"
         "motors/motors_is_pulse_guiding.c"
         "motors/motors_power.c"
@@ -96,8 +112,8 @@ idf_component_register(
         "led"
         "mount"
         "motors"
-        "power"
         "runtime"
+        "tmc"
         "utils"
         "usb_cdc"
         "proto"
@@ -108,5 +124,5 @@ idf_component_register(
         esp_driver_gpio
         esp_driver_ledc
         esp_driver_rmt
-        esp_adc
+        esp_driver_uart
 )

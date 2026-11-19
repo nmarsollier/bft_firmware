@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # Independent oracle — never derived from the firmware's own motion functions.
 SIDEREAL_DPS = 0.004178074
 GUIDE_DPS = 0.5 * SIDEREAL_DPS        # 0.002089037 deg/s (NOT 0.5 deg/s)
-DEG_PER_STEP = 1.8 / (32 * 500)       # 0.0001125 deg/microstep
-STEP_PULSE_TICKS = 12                 # 6 us HIGH at 2 MHz
+DEG_PER_STEP = 1.8 / (64 * 500)       # 0.00005625 deg/microstep
+STEP_PULSE_TICKS = 4                  # 2 us HIGH at 2 MHz
 STATUS_ERROR = 4                      # MotorsStatus::MOTORS_STATUS_ERROR
 
 
@@ -63,13 +63,19 @@ class PhdCalibrationTests(unittest.TestCase):
             "main/motors/motors_pulse_guide.c",
             "main/motors/motors_command_queue.c",
             "main/motors/motors_motion_task.c",
+            "main/motors/motors_motion_stop.c",
+            "main/motors/motors_motion_stop_graceful.c",
+            "main/motors/motors_motion_idle.c",
             "main/motors/motors_rmt.c",
             "main/motors/motors_hw.c",
             "main/motors/motors_current_state.c",
             "main/motors/motors_enter_error_state.c",
+            "main/motors/motors_microsteps.c",
+            "main/motors/motors_ramp.c",
             "main/motors/motors_get_tracking_speed.c",
             "main/motors/motors_stop.c",
             "main/motors/motors_horizon.c",
+            "test/host/tmc_stubs.c",
             "test/host/phd_sim.c",
         ]
         subprocess.run([
@@ -78,6 +84,7 @@ class PhdCalibrationTests(unittest.TestCase):
             "-I" + str(ROOT / "main"),
             "-I" + str(ROOT / "main/motors"),
             "-I" + str(ROOT / "main/config"),
+            "-I" + str(ROOT / "main/tmc"),
         ] + [str(ROOT / s) for s in src] + ["-lm", "-o", str(lib)], check=True)
 
         cls.lib = C.CDLL(str(lib))
@@ -220,12 +227,12 @@ class PhdCalibrationTests(unittest.TestCase):
         assert self.lib.sim_ra_steps() > ra0, "RA did not keep tracking"
 
     def test_substep_fraction_accumulation(self):
-        """20 × 10 ms north pulses integrate to ~3.71 steps, not 0 or 20."""
+        """20 × 10 ms north pulses integrate to ~7.4 steps, not 0 or 20."""
         dec0 = self.lib.sim_dec_steps()
         self._run_schedule([0] * 20, 10, 100)     # sub-step pulses
         dec_delta = self.lib.sim_dec_steps() - dec0
-        expected = 20 * _expected_steps(10)       # ~3.71
-        assert 2 <= dec_delta <= 5, f"sub-step sum {dec_delta} != ~{expected:.2f}"
+        expected = 20 * _expected_steps(10)       # ~7.4
+        assert 4 <= dec_delta <= 11, f"sub-step sum {dec_delta} != ~{expected:.2f}"
 
     def _run_entries(self, entries, total_ms):
         """Run an arbitrary schedule of (direction, duration_ms, at_ms) entries."""

@@ -31,16 +31,22 @@ class WaitIdleTests(unittest.TestCase):
             "main/motors/motors_pulse_guide.c",
             "main/motors/motors_command_queue.c",
             "main/motors/motors_motion_task.c",
+            "main/motors/motors_motion_stop.c",
+            "main/motors/motors_motion_stop_graceful.c",
+            "main/motors/motors_motion_idle.c",
             "main/motors/motors_rmt.c",
             "main/motors/motors_hw.c",
             "main/motors/motors_current_state.c",
             "main/motors/motors_enter_error_state.c",
+            "main/motors/motors_microsteps.c",
+            "main/motors/motors_ramp.c",
             "main/motors/motors_get_tracking_speed.c",
             "main/motors/motors_stop.c",
             "main/motors/motors_horizon.c",
             "main/motors/motors_limits.c",
             "main/utils/number_utils.c",
             "test/host/nvs_stubs.c",
+            "test/host/tmc_stubs.c",
             "test/host/limits_harness.c",
             "test/host/phd_sim.c",
         ]
@@ -50,6 +56,7 @@ class WaitIdleTests(unittest.TestCase):
             "-I" + str(ROOT / "main"),
             "-I" + str(ROOT / "main/motors"),
             "-I" + str(ROOT / "main/config"),
+            "-I" + str(ROOT / "main/tmc"),
         ] + [str(ROOT / s) for s in src] + ["-lm", "-o", str(lib)], check=True)
 
         cls.lib = C.CDLL(str(lib))

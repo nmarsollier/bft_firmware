@@ -1,17 +1,16 @@
-/* LED — led_set_state.c
+/* Led — led_set_state.c
  *
  * Purpose: apply LED state transitions (dim / bright / breathing).
  *
- * This is an internal helper called exclusively from led_update().
- * Other modules must never call this directly — led_update() is the
- * single public entry point that decides the correct state.
+ * Internal helper called exclusively from led_update(); other modules must
+ * never call led_set_state() directly.
  */
 #include "led_internal.h"
 
 #include "esp_err.h"
 #include "esp_log.h"
 
-static const char *TAG = "LED_STATE";
+static const char *TAG = "LED_SET_STATE";
 
 /* ── Shared state ──────────────────────────────────────────── */
 

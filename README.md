@@ -51,14 +51,14 @@ make -C test test-cdc
 ```
 Desktop gateway (Go) — Alpaca + UI
   └─ USB CDC-ACM (serial protocol)
-       └─ ESP32-S3: Proto → Mount → Motors → STEP/DIR (RMT)
+       └─ ESP32-S3: Proto → Mount → Motors → TMC2209 (STEP/DIR + UART)
 ```
 
 - **usb_cdc** (`main/usb_cdc/`) — CDC-ACM transport (TinyUSB).
 - **proto** (`main/proto/`) — serial protocol: framing, dispatch, one handler per family.
 - **mount** (`main/mount/`) — orchestration: state, coordinates, config.
 - **motors** (`main/motors/`) — motion: STEP/DIR GPIO and RMT pulse generation.
-- **power** (`main/power/`) — external power sensing.
+- **tmc** (`main/tmc/`) — TMC2209 config + probe over single-wire UART ("TMC working").
 - **led** (`main/led/`) / **buzzer** (`main/buzzer/`) — status indicator and beeps.
 - **runtime** (`main/runtime/`) — init sequence + periodic loop.
 
@@ -66,5 +66,5 @@ Desktop gateway (Go) — Alpaca + UI
 
 - **Pinout, microstepping and reduction**: `main/config/config.h` (single source of truth).
 - **Coordinate model**: `MOUNT.md`.
-- **Motors and drivers**: `MOTOR.md`.
+- **Drivers**: `TMC.md`.
 - **Serial protocol**: `main/proto/README.md`.

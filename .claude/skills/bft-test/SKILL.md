@@ -77,7 +77,7 @@ EOF
 - **Do not change the test expectation to make a bug pass.** The test expresses the
   correct behavior; if it fails, fix the firmware in `main/`.
 - Fixes go in the matching domain (`main/proto/`, `main/usb_cdc/`, `main/motors/`,
-  `main/mount/`, `main/power/`).
+  `main/mount/`, `main/tmc/`).
 - After the fix: `make -C test flash` (rebuild + flash), wait for the board to come
   back, then re-run only the failing test, then the whole suite.
 

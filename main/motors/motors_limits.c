@@ -18,22 +18,38 @@
 static const char *TAG = "MOTORS_LIMITS";
 static const char *NVS_NS = "mount";
 
-/* Mechanical travel limits (degrees), sized to forbid a full revolution
- * (cable wrap) while still covering the whole sky observable from Mendoza
- * (lat -32.89°).  DEC is asymmetric: +150° reaches the northern horizon on
- * the meridian; -50° suffices for the southern side. */
-#define LIMITS_DEFAULT_RA_MIN  -120.0f
-#define LIMITS_DEFAULT_RA_MAX   120.0f
-#define LIMITS_DEFAULT_DEC_MIN  -50.0f
-#define LIMITS_DEFAULT_DEC_MAX  150.0f
+/* Hard physical travel limits (degrees): the mechanical range of both axes.
+ * These bound the cable wrap and are NEVER exceeded — the operational (logical)
+ * limits below can only be narrowed inside this range, never widened past it. */
+#define PHYSICAL_RA_MIN   -100.0f
+#define PHYSICAL_RA_MAX    100.0f
+#define PHYSICAL_DEC_MIN  -135.0f
+#define PHYSICAL_DEC_MAX    50.0f
+
+/* Clamp a value to [lo, hi]. */
+static float clamp_limit(float v, float lo, float hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+/* Re-clamp the four logical limits into the hard physical bounds.  Called after
+ * every write (load, setters) so a runtime redefinition can never widen the
+ * travel beyond the physical range. */
+static void limits_clamp_to_physical(void) {
+    motors_state.limits.ra_min  = clamp_limit(motors_state.limits.ra_min,  PHYSICAL_RA_MIN,  PHYSICAL_RA_MAX);
+    motors_state.limits.ra_max  = clamp_limit(motors_state.limits.ra_max,  PHYSICAL_RA_MIN,  PHYSICAL_RA_MAX);
+    motors_state.limits.dec_min = clamp_limit(motors_state.limits.dec_min, PHYSICAL_DEC_MIN, PHYSICAL_DEC_MAX);
+    motors_state.limits.dec_max = clamp_limit(motors_state.limits.dec_max, PHYSICAL_DEC_MIN, PHYSICAL_DEC_MAX);
+}
 
 /* ── NVS persistence ─────────────────────────────────────── */
 
 void motors_limits_load(void) {
-    motors_state.limits.ra_min  = LIMITS_DEFAULT_RA_MIN;
-    motors_state.limits.ra_max  = LIMITS_DEFAULT_RA_MAX;
-    motors_state.limits.dec_min = LIMITS_DEFAULT_DEC_MIN;
-    motors_state.limits.dec_max = LIMITS_DEFAULT_DEC_MAX;
+    motors_state.limits.ra_min  = PHYSICAL_RA_MIN;
+    motors_state.limits.ra_max  = PHYSICAL_RA_MAX;
+    motors_state.limits.dec_min = PHYSICAL_DEC_MIN;
+    motors_state.limits.dec_max = PHYSICAL_DEC_MAX;
 
     nvs_handle_t h;
     esp_err_t err = nvs_open(NVS_NS, NVS_READONLY, &h);
@@ -53,6 +69,7 @@ void motors_limits_load(void) {
     if (nvs_get_u32(h, "dec_max", &v) == ESP_OK) motors_state.limits.dec_max = uint32_to_float(v);
 
     nvs_close(h);
+    limits_clamp_to_physical();
 }
 
 void motors_limits_save(void) {
@@ -101,6 +118,7 @@ bool motors_set_current_as_ra_left_limit(void) {
     }
     float pos = motors_get_ra_deg();
     motors_state.limits.ra_min = pos;
+    limits_clamp_to_physical();
     motors_limits_save();
     return true;
 }
@@ -113,6 +131,7 @@ bool motors_set_current_as_ra_right_limit(void) {
     }
     float pos = motors_get_ra_deg();
     motors_state.limits.ra_max = pos;
+    limits_clamp_to_physical();
     motors_limits_save();
     return true;
 }
@@ -125,6 +144,7 @@ bool motors_set_current_as_dec_left_limit(void) {
     }
     float pos = motors_get_dec_deg();
     motors_state.limits.dec_min = pos;
+    limits_clamp_to_physical();
     motors_limits_save();
     return true;
 }
@@ -137,6 +157,7 @@ bool motors_set_current_as_dec_right_limit(void) {
     }
     float pos = motors_get_dec_deg();
     motors_state.limits.dec_max = pos;
+    limits_clamp_to_physical();
     motors_limits_save();
     return true;
 }
@@ -148,10 +169,10 @@ bool motors_limits_reset(void) {
         return false;
     }
     portENTER_CRITICAL(&motors_state_lock);
-    motors_state.limits.ra_min  = LIMITS_DEFAULT_RA_MIN;
-    motors_state.limits.ra_max  = LIMITS_DEFAULT_RA_MAX;
-    motors_state.limits.dec_min = LIMITS_DEFAULT_DEC_MIN;
-    motors_state.limits.dec_max = LIMITS_DEFAULT_DEC_MAX;
+    motors_state.limits.ra_min  = PHYSICAL_RA_MIN;
+    motors_state.limits.ra_max  = PHYSICAL_RA_MAX;
+    motors_state.limits.dec_min = PHYSICAL_DEC_MIN;
+    motors_state.limits.dec_max = PHYSICAL_DEC_MAX;
     portEXIT_CRITICAL(&motors_state_lock);
     motors_limits_save();
     return true;

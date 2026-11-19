@@ -1,13 +1,13 @@
-/* LED — led_init.c
+/* Led — led_init.c
  *
- * Purpose: initialise LEDC PWM on GPIO 1 for brightness control.
+ * Purpose: initialise LEDC PWM on GPIO 5 for brightness control.
  *
  * Configures timer 0 at 5 kHz, 13-bit resolution (8192 steps),
- * binds channel 0 to GPIO 1, and starts with the dim (NORMAL) duty.
+ * binds channel 0 to GPIO 5, and starts with the dim (NORMAL) duty.
  *
- * The LED is driven directly from the GPIO (the inverting Darlington
- * driver was removed): the pin sources current, so higher duty = brighter
- * and no output inversion is required.
+ * The LED is driven directly from the GPIO: the pin sources current into the
+ * anode through a series resistor (cathode direct to GND), so higher duty =
+ * brighter and no output inversion is required.
  */
 #include "led_internal.h"
 

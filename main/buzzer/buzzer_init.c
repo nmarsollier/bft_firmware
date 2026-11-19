@@ -1,13 +1,12 @@
 /* Buzzer — buzzer_init.c
  *
- * Purpose: initialise GPIO 9 for the active event buzzer.
+ * Purpose: initialise the GPIO for the active event buzzer.
  *
  * Configures the buzzer pin as a push-pull output, leaves it idle (silent),
  * and emits the power-on beep.
  *
- * The buzzer is powered from 5V and switched through a UMC2003 Darlington
- * (sinking) output, so the idle level is LOW (output released, no standing
- * current) and the pin is pulsed HIGH to beep.
+ * The buzzer is a small active-buzzer module driven from the GPIO, so the
+ * idle level is LOW (silent) and the pin is pulsed HIGH to beep.
  */
 #include "buzzer_internal.h"
 

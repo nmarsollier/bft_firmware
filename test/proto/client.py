@@ -49,14 +49,19 @@ def detect_serial_port():
 
 
 def detect_flash_port():
-    """Return the BFT USB-Serial/JTAG port used for flashing, or None.
+    """Return the port used for flashing, or None.
 
-    The board exposes two USB endpoints: the native USB-Serial/JTAG (flashing +
-    monitor) and the CDC-ACM (the mount protocol).  The JTAG endpoint enumerates
-    as /dev/cu.usbserial-* on macOS (ttyUSB* on Linux) with the Espressif VID
-    0x303A, while the protocol endpoint is /dev/cu.usbmodem* (matched above).
+    The board exposes two USB endpoints: a QinHeng USB-to-serial bridge (CH343,
+    VID 0x1A86) wired to UART0 — used for flashing + monitor, esptool auto-resets
+    over it via DTR/RTS — and the CDC-ACM mount protocol (VID 0x303A, PID 0x4001,
+    enumerated as /dev/cu.usbmodem*).  The flash port is the UART0 bridge.
     """
     ports = list(serial.tools.list_ports.comports())
+    # QinHeng USB-to-serial (CH340/CH341/CH343/CH9102) → UART0 flashing port.
+    for p in ports:
+        if getattr(p, "vid", None) == 0x1A86:
+            return p.device
+    # Fallback: native USB-Serial/JTAG or a classic "usbserial"/"ttyUSB" bridge.
     for p in ports:
         dev = p.device or ""
         if getattr(p, "vid", None) == 0x303A and "usbserial" in dev:
